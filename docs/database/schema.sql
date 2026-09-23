@@ -225,17 +225,3 @@ CREATE INDEX IF NOT EXISTS "idx_budget_deleted_at" ON "budget" ("deleted_at");
 
 -- 唯一约束：同一用户同一月份只能有一个预算
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_budget_unique" ON "budget" ("user_id", "year", "month") WHERE "deleted_at" IS NULL;
-
--- ============================================================
--- 10. 数据库元数据表 (SchemaMeta)
--- 说明：存储数据库版本信息，用于Schema迁移
--- ============================================================
-CREATE TABLE IF NOT EXISTS "schema_meta" (
-    "key" TEXT PRIMARY KEY,                       -- 键名
-    "value" TEXT NOT NULL,                        -- 值
-    "updated_at" INTEGER NOT NULL                 -- 更新时间（Unix时间戳）
-);
-
--- 插入初始版本号
-INSERT OR REPLACE INTO "schema_meta" ("key", "value", "updated_at")
-VALUES ('schema_version', '1', strftime('%s', 'now'));

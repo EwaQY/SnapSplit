@@ -16,7 +16,6 @@ DROP TABLE IF EXISTS "budget";
 DROP TABLE IF EXISTS "category";
 DROP TABLE IF EXISTS "ledger";
 DROP TABLE IF EXISTS "user";
-DROP TABLE IF EXISTS "schema_meta";
 
 -- 重新启用外键约束
 PRAGMA foreign_keys = ON;
