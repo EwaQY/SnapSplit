@@ -1,7 +1,7 @@
 -- ============================================================
 -- SnapSplit SQLite Database Schema
--- Version: 1.0
--- Based on PRD V2.0
+-- Version: 2.0
+-- Based on PRD V3.0
 -- 说明：所有时间字段使用Unix时间戳（INTEGER），金额字段使用"分"为单位
 -- ============================================================
 
@@ -14,21 +14,12 @@ PRAGMA foreign_keys = ON;
 -- ============================================================
 CREATE TABLE IF NOT EXISTS "user" (
     "id" TEXT PRIMARY KEY,                        -- UUID主键
-    "account_id" TEXT,                            -- 服务器账号ID（预留，MVP可空）
-    "phone" TEXT,                                 -- 手机号（预留，MVP可空）
-    "email" TEXT,                                 -- 邮箱（预留，MVP可空）
-    "password_hash" TEXT,                         -- 密码哈希（预留，MVP可空）
     "nickname" TEXT NOT NULL,                     -- 昵称
     "avatar" TEXT,                                -- 头像URL
     "is_self" INTEGER NOT NULL DEFAULT 0,         -- 是否为本地账户"我"：1=是，0=否（虚拟成员）
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
-    "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "created_by" TEXT,                            -- 创建者用户ID
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT                              -- 服务器ID（预留，MVP可空）
+    "deleted_at" INTEGER                          -- 软删除时间（NULL表示未删除）
 );
 
 -- 索引
@@ -46,11 +37,6 @@ CREATE TABLE IF NOT EXISTS "ledger" (
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "created_by" TEXT,                            -- 创建者用户ID
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("owner_user_id") REFERENCES "user" ("id")
 );
 
@@ -66,16 +52,10 @@ CREATE TABLE IF NOT EXISTS "ledger_member" (
     "id" TEXT PRIMARY KEY,                        -- UUID主键
     "ledger_id" TEXT NOT NULL,                    -- 账本ID
     "user_id" TEXT NOT NULL,                      -- 用户ID
-    "role" TEXT,                                  -- 角色（预留，MVP不做权限控制）
     "joined_at" INTEGER NOT NULL,                 -- 加入时间（Unix时间戳）
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "created_by" TEXT,                            -- 创建者用户ID
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("ledger_id") REFERENCES "ledger" ("id"),
     FOREIGN KEY ("user_id") REFERENCES "user" ("id")
 );
@@ -98,7 +78,6 @@ CREATE TABLE IF NOT EXISTS "shopping_list" (
     "title" TEXT,                                 -- 购物单标题
     "merchant" TEXT,                              -- 商家名称
     "occurred_at" INTEGER NOT NULL,               -- 发生时间（Unix时间戳）
-    "created_by" TEXT NOT NULL,                   -- 创建者用户ID
     "default_payer_id" TEXT,                      -- 默认付款人ID
     "default_participant_ids" TEXT,               -- 默认参与人ID列表（JSON格式）
     "note" TEXT,                                  -- 备注
@@ -106,12 +85,7 @@ CREATE TABLE IF NOT EXISTS "shopping_list" (
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("ledger_id") REFERENCES "ledger" ("id"),
-    FOREIGN KEY ("created_by") REFERENCES "user" ("id"),
     FOREIGN KEY ("default_payer_id") REFERENCES "user" ("id")
 );
 
@@ -139,11 +113,6 @@ CREATE TABLE IF NOT EXISTS "expense_item" (
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "created_by" TEXT,                            -- 创建者用户ID
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("shopping_list_id") REFERENCES "shopping_list" ("id"),
     FOREIGN KEY ("ledger_id") REFERENCES "ledger" ("id"),
     FOREIGN KEY ("category_id") REFERENCES "category" ("id"),
@@ -171,11 +140,6 @@ CREATE TABLE IF NOT EXISTS "item_participant" (
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "created_by" TEXT,                            -- 创建者用户ID
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("expense_item_id") REFERENCES "expense_item" ("id"),
     FOREIGN KEY ("user_id") REFERENCES "user" ("id")
 );
@@ -200,18 +164,12 @@ CREATE TABLE IF NOT EXISTS "transfer" (
     "amount" INTEGER NOT NULL,                    -- 转账金额（分）
     "occurred_at" INTEGER NOT NULL,               -- 转账时间（Unix时间戳）
     "note" TEXT,                                  -- 备注
-    "created_by" TEXT NOT NULL,                   -- 创建者用户ID
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("ledger_id") REFERENCES "ledger" ("id"),
     FOREIGN KEY ("from_user_id") REFERENCES "user" ("id"),
-    FOREIGN KEY ("to_user_id") REFERENCES "user" ("id"),
-    FOREIGN KEY ("created_by") REFERENCES "user" ("id")
+    FOREIGN KEY ("to_user_id") REFERENCES "user" ("id")
 );
 
 -- 索引
@@ -223,28 +181,25 @@ CREATE INDEX IF NOT EXISTS "idx_transfer_deleted_at" ON "transfer" ("deleted_at"
 
 -- ============================================================
 -- 8. 分类表 (Category)
--- 说明：账目分类，系统预置+自定义
+-- 说明：账目分类，系统预置+账本级自定义
 -- ============================================================
 CREATE TABLE IF NOT EXISTS "category" (
     "id" TEXT PRIMARY KEY,                        -- UUID主键
     "name" TEXT NOT NULL,                         -- 分类名称
     "icon" TEXT,                                  -- 分类图标
     "is_system" INTEGER NOT NULL DEFAULT 0,       -- 是否系统预置：1=系统预置，0=自定义
-    "ledger_id" TEXT,                             -- 账本ID（NULL=全局分类，非NULL=账本级自定义分类）
+    "ledger_id" TEXT,                             -- 账本ID（NULL=全局预置分类，非NULL=账本级自定义分类）
+    "archived_at" INTEGER,                        -- 归档时间（NULL=活跃，有值=已归档）
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "created_by" TEXT,                            -- 创建者用户ID
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("ledger_id") REFERENCES "ledger" ("id")
 );
 
 -- 索引
 CREATE INDEX IF NOT EXISTS "idx_category_is_system" ON "category" ("is_system");
 CREATE INDEX IF NOT EXISTS "idx_category_ledger" ON "category" ("ledger_id");
+CREATE INDEX IF NOT EXISTS "idx_category_archived_at" ON "category" ("archived_at");
 CREATE INDEX IF NOT EXISTS "idx_category_deleted_at" ON "category" ("deleted_at");
 
 -- ============================================================
@@ -260,11 +215,6 @@ CREATE TABLE IF NOT EXISTS "budget" (
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    "created_by" TEXT,                            -- 创建者用户ID
-    "updated_by" TEXT,                            -- 最后修改者用户ID
-    "device_id" TEXT,                             -- 创建/修改设备ID
-    "version" INTEGER NOT NULL DEFAULT 1,         -- 版本号（用于同步冲突检测）
-    "server_id" TEXT,                             -- 服务器ID（预留，MVP可空）
     FOREIGN KEY ("user_id") REFERENCES "user" ("id")
 );
 
