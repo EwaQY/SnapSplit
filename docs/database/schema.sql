@@ -1,7 +1,7 @@
 -- ============================================================
 -- SnapSplit SQLite Database Schema
--- Version: 2.0
--- Based on PRD V3.0
+-- Version: 3.0
+-- Based on PRD V4.0
 -- 说明：所有时间字段使用Unix时间戳（INTEGER），金额字段使用"分"为单位
 -- ============================================================
 
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS "shopping_list" (
     "default_payer_id" TEXT,                      -- 默认付款人ID
     "default_participant_ids" TEXT,               -- 默认参与人ID列表（JSON格式）
     "note" TEXT,                                  -- 备注
-    "source" TEXT NOT NULL DEFAULT 'manual',      -- 来源：manual=手动，ai=AI识别
+    "source" TEXT NOT NULL DEFAULT 'manual',      -- 来源：manual=手动，ai=AI在线解析，local=本地解析
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
@@ -106,16 +106,13 @@ CREATE TABLE IF NOT EXISTS "expense_item" (
     "quantity" INTEGER NOT NULL DEFAULT 1,        -- 数量
     "unit_price" INTEGER NOT NULL DEFAULT 0,      -- 单价（分）
     "final_amount" INTEGER NOT NULL,              -- 最终金额（分，已摊入折扣/附加费）
-    "category_id" TEXT,                           -- 分类ID
     "payer_id" TEXT NOT NULL,                     -- 付款人/垫付人用户ID
-    "split_type" TEXT NOT NULL DEFAULT 'equal',   -- 分摊方式：equal=均摊，ratio=按比例，amount=按金额
     "note" TEXT,                                  -- 备注
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
     FOREIGN KEY ("shopping_list_id") REFERENCES "shopping_list" ("id"),
     FOREIGN KEY ("ledger_id") REFERENCES "ledger" ("id"),
-    FOREIGN KEY ("category_id") REFERENCES "category" ("id"),
     FOREIGN KEY ("payer_id") REFERENCES "user" ("id")
 );
 
@@ -123,7 +120,6 @@ CREATE TABLE IF NOT EXISTS "expense_item" (
 CREATE INDEX IF NOT EXISTS "idx_expense_item_shopping_list" ON "expense_item" ("shopping_list_id");
 CREATE INDEX IF NOT EXISTS "idx_expense_item_ledger" ON "expense_item" ("ledger_id");
 CREATE INDEX IF NOT EXISTS "idx_expense_item_payer" ON "expense_item" ("payer_id");
-CREATE INDEX IF NOT EXISTS "idx_expense_item_category" ON "expense_item" ("category_id");
 CREATE INDEX IF NOT EXISTS "idx_expense_item_deleted_at" ON "expense_item" ("deleted_at");
 
 -- ============================================================
@@ -180,30 +176,45 @@ CREATE INDEX IF NOT EXISTS "idx_transfer_occurred_at" ON "transfer" ("occurred_a
 CREATE INDEX IF NOT EXISTS "idx_transfer_deleted_at" ON "transfer" ("deleted_at");
 
 -- ============================================================
--- 8. 分类表 (Category)
--- 说明：账目分类，系统预置+账本级自定义
+-- 8. 标签表 (Tag)
+-- 说明：账目标签，全局共享，支持归档
 -- ============================================================
-CREATE TABLE IF NOT EXISTS "category" (
+CREATE TABLE IF NOT EXISTS "tag" (
     "id" TEXT PRIMARY KEY,                        -- UUID主键
-    "name" TEXT NOT NULL,                         -- 分类名称
-    "icon" TEXT,                                  -- 分类图标
-    "is_system" INTEGER NOT NULL DEFAULT 0,       -- 是否系统预置：1=系统预置，0=自定义
-    "ledger_id" TEXT,                             -- 账本ID（NULL=全局预置分类，非NULL=账本级自定义分类）
+    "name" TEXT NOT NULL,                         -- 标签名称
+    "icon" TEXT,                                  -- 标签图标
     "archived_at" INTEGER,                        -- 归档时间（NULL=活跃，有值=已归档）
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
-    "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
-    FOREIGN KEY ("ledger_id") REFERENCES "ledger" ("id")
+    "deleted_at" INTEGER                          -- 软删除时间（NULL表示未删除）
 );
 
 -- 索引
-CREATE INDEX IF NOT EXISTS "idx_category_is_system" ON "category" ("is_system");
-CREATE INDEX IF NOT EXISTS "idx_category_ledger" ON "category" ("ledger_id");
-CREATE INDEX IF NOT EXISTS "idx_category_archived_at" ON "category" ("archived_at");
-CREATE INDEX IF NOT EXISTS "idx_category_deleted_at" ON "category" ("deleted_at");
+CREATE INDEX IF NOT EXISTS "idx_tag_archived_at" ON "tag" ("archived_at");
+CREATE INDEX IF NOT EXISTS "idx_tag_deleted_at" ON "tag" ("deleted_at");
 
 -- ============================================================
--- 9. 周期预算表 (Budget)
+-- 9. 账目-标签关联表 (ItemTag)
+-- 说明：账目与标签的多对多关联；无软删除字段，账目软删除时应用层在同一事务内硬删除关联行
+-- ============================================================
+CREATE TABLE IF NOT EXISTS "item_tag" (
+    "id" TEXT PRIMARY KEY,                        -- UUID主键
+    "expense_item_id" TEXT NOT NULL,              -- 关联账目ID
+    "tag_id" TEXT NOT NULL,                       -- 关联标签ID
+    "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
+    FOREIGN KEY ("expense_item_id") REFERENCES "expense_item" ("id"),
+    FOREIGN KEY ("tag_id") REFERENCES "tag" ("id")
+);
+
+-- 索引
+CREATE INDEX IF NOT EXISTS "idx_item_tag_item" ON "item_tag" ("expense_item_id");
+CREATE INDEX IF NOT EXISTS "idx_item_tag_tag" ON "item_tag" ("tag_id");
+
+-- 唯一约束：同一账目不能重复打同一标签
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_item_tag_unique" ON "item_tag" ("expense_item_id", "tag_id");
+
+-- ============================================================
+-- 10. 周期预算表 (Budget)
 -- 说明：按自然月设置预算，统计"我的消费"
 -- ============================================================
 CREATE TABLE IF NOT EXISTS "budget" (
