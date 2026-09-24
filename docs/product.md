@@ -243,6 +243,7 @@
   - 付款人=当前用户"我"/上传者。
   - 参与人=账本全部未删除成员。
 - 用户可批量应用默认值到当前所有商品，之后每个商品独立修改。
+- Header 默认值随购物单保存为快照；编辑页重进时恢复快照，加新行/批量应用以快照为准。
 - 不搞父子覆写逻辑，每个商品生来独立。
 
 ### 6.6 分摊规则
@@ -419,8 +420,8 @@
 - title
 - merchant
 - occurred_at
-- default_payer_id
-- default_participant_ids
+- default_payer_id：用户最后确认的 Header 默认付款人快照
+- default_participant_ids：用户最后确认的 Header 默认参与人快照（JSON 数组），创建/编辑保存时写入，加新行/批量应用时读取
 - note
 - source（manual/ai/local）
 - created_at
@@ -445,9 +446,7 @@
 - id
 - expense_item_id
 - user_id
-- share_amount
-- ratio
-- is_included
+- share_amount：具体分摊金额（NOT NULL），所有分摊方式保存时统一计算
 - created_at
 - updated_at
 - deleted_at

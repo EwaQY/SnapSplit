@@ -78,8 +78,8 @@ CREATE TABLE IF NOT EXISTS "shopping_list" (
     "title" TEXT,                                 -- 购物单标题
     "merchant" TEXT,                              -- 商家名称
     "occurred_at" INTEGER NOT NULL,               -- 发生时间（Unix时间戳）
-    "default_payer_id" TEXT,                      -- 默认付款人ID
-    "default_participant_ids" TEXT,               -- 默认参与人ID列表（JSON格式）
+    "default_payer_id" TEXT,                      -- 默认付款人ID：用户最后确认的Header默认付款人快照
+    "default_participant_ids" TEXT,               -- 默认参与人ID列表（JSON格式）：用户最后确认的Header默认参与人快照，创建/编辑保存时写入，加新行/批量应用时读取
     "note" TEXT,                                  -- 备注
     "source" TEXT NOT NULL DEFAULT 'manual',      -- 来源：manual=手动，ai=AI在线解析，local=本地解析
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
@@ -130,9 +130,7 @@ CREATE TABLE IF NOT EXISTS "item_participant" (
     "id" TEXT PRIMARY KEY,                        -- UUID主键
     "expense_item_id" TEXT NOT NULL,              -- 关联账目ID
     "user_id" TEXT NOT NULL,                      -- 参与人用户ID
-    "share_amount" INTEGER,                       -- 分摊金额（分），按金额/均摊时使用
-    "ratio" REAL,                                 -- 分摊比例，按比例分摊时使用（如0.25表示25%）
-    "is_included" INTEGER NOT NULL DEFAULT 1,     -- 是否参与分摊：1=参与，0=不参与
+    "share_amount" INTEGER NOT NULL,              -- 具体分摊金额（分）：所有分摊方式保存时统一计算
     "created_at" INTEGER NOT NULL,                -- 创建时间（Unix时间戳）
     "updated_at" INTEGER NOT NULL,                -- 最后更新时间（Unix时间戳）
     "deleted_at" INTEGER,                         -- 软删除时间（NULL表示未删除）
@@ -192,6 +190,9 @@ CREATE TABLE IF NOT EXISTS "tag" (
 -- 索引
 CREATE INDEX IF NOT EXISTS "idx_tag_archived_at" ON "tag" ("archived_at");
 CREATE INDEX IF NOT EXISTS "idx_tag_deleted_at" ON "tag" ("deleted_at");
+
+-- 唯一约束：标签名全局唯一（软删除后可重建同名；已归档的同名需先取消归档）
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_tag_name_unique" ON "tag" ("name") WHERE "deleted_at" IS NULL;
 
 -- ============================================================
 -- 9. 账目-标签关联表 (ItemTag)
