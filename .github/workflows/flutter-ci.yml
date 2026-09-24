@@ -9,8 +9,6 @@ on:
       - 'src/app/**'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
-    branches-ignore:
-      - main
     paths:
       - 'src/app/**'
       - '.github/workflows/flutter-ci.yml'
