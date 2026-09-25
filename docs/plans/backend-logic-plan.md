@@ -37,7 +37,7 @@
 
 | # | 模块 | 范围（PRD 章节 / 表） | 提示词要点 | 验收要求 | 状态 |
 |---|---|---|---|---|---|
-| P0 | drift 基座 | drift 依赖 + 10 张 Dart 表类 + `AppDatabase(@DriftDatabase)` + 迁移策略（`createAll` + 原文索引 + 外键 ON）/ `AppException(sealed)` / 金额·时间·UUID 工具 | 表类 `tableName` 锁定原名；主键 TEXT；时间/金额 `IntColumn` | 等价性测试语义全对比通过 + `flutter analyze` 零警告 | 待施工 |
+| P0 | drift 基座 | drift 依赖 + 10 张 Dart 表类 + `AppDatabase(@DriftDatabase)` + 迁移策略（`createAll` + 原文索引 + 外键 ON）/ `AppException(sealed)` / 金额·时间·UUID 工具 | 表类 `tableName` 锁定原名；主键 TEXT；时间/金额 `IntColumn` | 等价性测试语义全对比通过 + `flutter analyze` 零警告 | 已完成 |
 | P1 | user / ledger / member | PRD §5.1/5.2/6.1–6.3；表 `user, ledger, ledger_member`：`ensureSelf` 首次建我、改昵称头像、建账本（我自动进成员）、虚拟人增改软删 | 历史账目保留已删成员引用并显示“已删除成员”；`ledger_member(ledger_id,user_id)` 唯一 | 内存库单测：建我幂等、成员唯一约束、软删过滤 | 待施工 |
 | P2 | shopping / expense / split | PRD §5.3/5.4/5.6/6.4–6.6；表 `shopping_list, expense_item, item_participant`：单账目降维建单（写 `default_payer/participant_ids` 快照）、多账目建单、编辑恢复快照、删除同事务软删子（`expense_item` + `item_participant`）并硬删 `item_tag`；`SplitCalc` 支持均摊/比例/金额，余数优先垫付人否则最大份额者，`sum == final`，参与人 ≥ 1，付款人可不在参与人内 | 纯函数放 domain，无 DB 依赖 | seed 真数断言：`ei-007 3500 分 → 4 × 875`；级联删断言；`sum == final` 恒成立 | 待施工 |
 | P3 | surcharge / tag / budget / period | PRD §6.7/6.8/6.12/6.14–6.15；`surcharge` 按原始金额比例摊入（四舍五入、差额给最大商品，单商品直接计入，不持久化中间字段）；表 `tag, item_tag` 全局共享、新建改名归档（`archived_at`），归档后新单不可选、历史引用保留，`item_tag` 无软删随账目硬删；表 `budget` 自然月全局粒度、`我作 payer 求和 / 预算`、超支仅警告；`isArchived` 历史周期抛 `ArchivedReadOnly` 禁写 | UI 仅归档不删除标签 | 归档/禁写/预算进度单测绿 | 待施工 |
@@ -81,4 +81,5 @@
 | 日期 | 模块 | commit | 结论 |
 |---|---|---|---|
 | 2026-09-25 | 决策 | — | 切纯 Dart Table 类 + 语义等价；seed 自插；移除 sqflite 系；旧 sqflite 版 P0（未 commit）作废 |
+| 2026-09-26 | P0 | feat(p0)+test(p0) | T0-1~T0-6 全绿（19 tests）+ analyze 零问题，用户已确认测试方案与结果 |
 | — | — | — | 待施工，本文档待验收 |
