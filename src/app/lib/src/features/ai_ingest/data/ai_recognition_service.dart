@@ -41,7 +41,7 @@ class AiRecognitionService {
     sourceImageIndex: sourceImageIndex,
   );
 
-  /// 解析图片字节。
+  /// 解析图片字节（抖动重试 1 次：5xx/超时/断网/截断）。
   Future<AiReceiptDto> parseImageBytes(
     Uint8List bytes, {
     String mime = 'image/jpeg',
@@ -54,6 +54,48 @@ class AiRecognitionService {
         '图片超过 10MB 上限',
       );
     }
+    try {
+      return await _parseOnce(
+        bytes,
+        mime: mime,
+        sourceImageIndex: sourceImageIndex,
+      );
+    } on AiException catch (e) {
+      if (!_isTransient(e)) {
+        rethrow;
+      }
+      // 抖动重试 1 次（截断/500/超时多半第二次成功）。
+      return _parseOnce(
+        bytes,
+        mime: mime,
+        sourceImageIndex: sourceImageIndex,
+      );
+    }
+  }
+
+  /// 瞬时故障才值得重试：5xx、超时断网、JSON 截断。
+  /// 确定性错误（鉴权、坏信封、数量非法）不重试。
+  bool _isTransient(AiException e) {
+    if (e.kind == AiFailureKind.network) {
+      return true;
+    }
+    if (e.kind == AiFailureKind.badStatus) {
+      return e.message.contains('500') ||
+          e.message.contains('502') ||
+          e.message.contains('503');
+    }
+    if (e.kind == AiFailureKind.badPayload) {
+      return e.message.contains('Unterminated') ||
+          e.message.contains('Unexpected end of input');
+    }
+    return false;
+  }
+
+  Future<AiReceiptDto> _parseOnce(
+    Uint8List bytes, {
+    required String mime,
+    required int sourceImageIndex,
+  }) async {
     final String base64Image = base64Encode(bytes);
     final Map<String, dynamic> body = <String, dynamic>{
       'model': config.modelId,
@@ -104,12 +146,14 @@ class AiRecognitionService {
         'AI 服务返回 ${response.statusCode}：${response.body}',
       );
     }
+    String? stripped;
     try {
       final Map<String, dynamic> envelope =
           jsonDecode(response.body) as Map<String, dynamic>;
       final String content = _extractContent(envelope);
+      stripped = _stripFences(content);
       final Map<String, dynamic> data =
-          jsonDecode(_stripFences(content)) as Map<String, dynamic>;
+          jsonDecode(stripped) as Map<String, dynamic>;
       final AiReceiptDto dto = aiReceiptDtoFromPythonJson(
         data,
         sourceImageIndex: sourceImageIndex,
@@ -121,8 +165,20 @@ class AiRecognitionService {
     } on AiException {
       rethrow;
     } on FormatException catch (e) {
-      throw AiException(AiFailureKind.badPayload, 'AI 响应 JSON 非法：$e');
+      throw AiException(
+        AiFailureKind.badPayload,
+        'AI 响应 JSON 非法：$e；原文前 500 字：${_snippet(stripped)}',
+      );
     }
+  }
+
+  /// 原文片段（定位截断/乱码，防超长日志）。
+  String _snippet(String? text) {
+    if (text == null || text.isEmpty) {
+      return '<空>';
+    }
+    final String oneLine = text.replaceAll(RegExp(r'\s+'), ' ');
+    return oneLine.length <= 500 ? oneLine : oneLine.substring(0, 500);
   }
 
   /// 提取 Cline 信封 `data.choices[0].message.content`。
@@ -183,21 +239,31 @@ AiReceiptDto aiReceiptDtoFromPythonJson(
     throw const AiException(AiFailureKind.badPayload, 'AI 识别结果无商品');
   }
   final num? totalDiscount = toNum(json['total_discount']);
+  final List<AiReceiptItem> parsed = <AiReceiptItem>[];
+  for (final dynamic raw in items) {
+    final Map<String, dynamic> map = raw as Map<String, dynamic>;
+    final int quantity = toNum(map['quantity'])?.toInt() ?? 1;
+    if (quantity < 1) {
+      throw AiException(
+        AiFailureKind.badPayload,
+        'AI 商品数量非法（<1）：${map['name']}',
+      );
+    }
+    parsed.add(
+      AiReceiptItem(
+        name: map['name'].toString(),
+        quantity: quantity,
+        unitPrice: toNum(map['unit_price']) ?? toNum(map['amount']) ?? 0,
+        amount: toNum(map['amount']) ?? 0,
+        paidAmount: toNum(map['paid_amount']),
+      ),
+    );
+  }
   return AiReceiptDto(
     sourceImageIndex: sourceImageIndex,
     merchant: json['merchant']?.toString(),
     date: json['expense_date']?.toString(),
-    items: <AiReceiptItem>[
-      for (final dynamic raw in items)
-        AiReceiptItem(
-          name: (raw as Map<String, dynamic>)['name'].toString(),
-          quantity: toNum(raw['quantity']) ?? 1,
-          unitPrice:
-              toNum(raw['unit_price']) ?? toNum(raw['amount']) ?? 0,
-          amount: toNum(raw['amount']) ?? 0,
-          paidAmount: toNum(raw['paid_amount']),
-        ),
-    ],
+    items: parsed,
     discounts: <AiAdjustment>[
       if (totalDiscount != null && totalDiscount != 0)
         AiAdjustment(name: 'AI订单折扣', amount: totalDiscount),

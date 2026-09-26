@@ -187,7 +187,7 @@ void main() {
           ),
         ),
       );
-    }, timeout: const Timeout(Duration(seconds: 90)));
+    }, timeout: const Timeout(Duration(seconds: 150)));
 
     test('坏信封与空商品抛 badPayload', () async {
       final AiRecognitionService badEnvelope = AiRecognitionService(
@@ -240,6 +240,127 @@ void main() {
         service.parseImageBytes(
           Uint8List(AiRecognitionService.maxImageBytes + 1),
         ),
+        throwsA(
+          isA<AiException>().having(
+            (AiException e) => e.kind,
+            'kind',
+            AiFailureKind.badPayload,
+          ),
+        ),
+      );
+    });
+
+    test('500 重试一次后成功', () async {
+      int calls = 0;
+      final AiRecognitionService service = AiRecognitionService(
+        config: config,
+        client: MockClient((http.Request request) async {
+          calls++;
+          if (calls == 1) {
+            return http.Response('busy', 500);
+          }
+          return okJson(
+            envelopeOf(
+              jsonEncode(<String, dynamic>{
+                'merchant': '店',
+                'items': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'name': '水',
+                    'quantity': 1,
+                    'unit_price': 200,
+                    'amount': 200,
+                  },
+                ],
+              }),
+            ),
+          );
+        }),
+      );
+      addTearDown(service.close);
+      final AiReceiptDto dto = await service.parseImageBytes(image);
+      expect(dto.items.single.name, '水');
+      expect(calls, 2);
+    });
+
+    test('截断 JSON 重试一次后成功', () async {
+      int calls = 0;
+      final AiRecognitionService service = AiRecognitionService(
+        config: config,
+        client: MockClient((http.Request request) async {
+          calls++;
+          if (calls == 1) {
+            return okJson(envelopeOf('{"merchant": "店", "sub'));
+          }
+          return okJson(
+            envelopeOf(
+              jsonEncode(<String, dynamic>{
+                'merchant': '店',
+                'items': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'name': '水',
+                    'quantity': 1,
+                    'unit_price': 200,
+                    'amount': 200,
+                  },
+                ],
+              }),
+            ),
+          );
+        }),
+      );
+      addTearDown(service.close);
+      final AiReceiptDto dto = await service.parseImageBytes(image);
+      expect(dto.merchant, '店');
+      expect(calls, 2);
+    });
+
+    test('确定性错误不重试（401 一次即抛）', () async {
+      int calls = 0;
+      final AiRecognitionService service = AiRecognitionService(
+        config: config,
+        client: MockClient((http.Request request) async {
+          calls++;
+          return http.Response('unauthorized', 401);
+        }),
+      );
+      addTearDown(service.close);
+      await expectLater(
+        service.parseImageBytes(image),
+        throwsA(
+          isA<AiException>().having(
+            (AiException e) => e.kind,
+            'kind',
+            AiFailureKind.badStatus,
+          ),
+        ),
+      );
+      expect(calls, 1);
+    });
+
+    test('数量为 0 抛 badPayload', () async {
+      final AiRecognitionService service = AiRecognitionService(
+        config: config,
+        client: MockClient((http.Request request) async {
+          return okJson(
+            envelopeOf(
+              jsonEncode(<String, dynamic>{
+                'merchant': '店',
+                'items': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'name': '怪货',
+                    'quantity': 0,
+                    'unit_price': 100,
+                    'amount': 100,
+                  },
+                ],
+              }),
+            ),
+          );
+        }),
+      );
+      addTearDown(service.close);
+      await expectLater(
+        service.parseImageBytes(image),
         throwsA(
           isA<AiException>().having(
             (AiException e) => e.kind,
