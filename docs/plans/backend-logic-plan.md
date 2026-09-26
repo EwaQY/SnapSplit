@@ -41,7 +41,7 @@
 | P1 | user / ledger / member | PRD §5.1/5.2/6.1–6.3；表 `user, ledger, ledger_member`：`ensureSelf` 首次建我、改昵称头像、建账本（我自动进成员）、虚拟人增改软删 | 历史账目保留已删成员引用并显示“已删除成员”；`ledger_member(ledger_id,user_id)` 唯一 | 内存库单测：建我幂等、成员唯一约束、软删过滤 | 已完成 |
 | P2 | shopping / expense / split | PRD §5.3/5.4/5.6/6.4–6.6；表 `shopping_list, expense_item, item_participant`：单账目降维建单（写 `default_payer/participant_ids` 快照）、多账目建单、编辑恢复快照、删除同事务软删子（`expense_item` + `item_participant`）并硬删 `item_tag`；`SplitCalc` 支持均摊/比例/金额，余数优先垫付人否则最大份额者，`sum == final`，参与人 ≥ 1，付款人可不在参与人内 | 纯函数放 domain，无 DB 依赖 | seed 真数断言：`ei-007 3500 分 → 4 × 875`；级联删断言；`sum == final` 恒成立 | 已完成 |
 | P3 | surcharge / tag / budget / period | PRD §6.7/6.8/6.12/6.14–6.15；`surcharge` 按原始金额比例摊入（四舍五入、差额给最大商品，单商品直接计入，不持久化中间字段）；表 `tag, item_tag` 全局共享、新建改名归档（`archived_at`），归档后新单不可选、历史引用保留，`item_tag` 无软删随账目硬删；表 `budget` 自然月全局粒度、`我作 payer 求和 / 预算`、超支仅警告；`isArchived` 历史周期抛 `ArchivedReadOnly` 禁写 | UI 仅归档不删除标签 | 归档/禁写/预算进度单测绿 | 已完成 |
-| P4 | transfer / settlement / timeline | PRD §5.7/6.9–6.11；表 `transfer`：任意成员互转（默认我 → 对方）、不计消费只冲余额、仅当期可改删；`calcBoard` 输出我视角两两净额 + 全局应收/应付（不做最优转账）；timeline 按 `occurred_at` 倒序、单账目降维、多商品 ≤ 5 全展、> 5 前 3–4 +“共 N 项”、转账同层独立、历史标“已归档” | 结算为只读聚合，不写库 | 结算 → 转账 → 余额归零断言；时间线快照断言 | 待施工 |
+| P4 | transfer / settlement / timeline | PRD §5.7/6.9–6.11；表 `transfer`：任意成员互转（默认我 → 对方）、不计消费只冲余额、仅当期可改删；`calcBoard` 输出我视角两两净额 + 全局应收/应付（不做最优转账）；timeline 按 `occurred_at` 倒序、单账目降维、多商品 ≤ 5 全展、> 5 前 3–4 +“共 N 项”、转账同层独立、历史标“已归档” | 结算为只读聚合，不写库 | 结算 → 转账 → 余额归零断言；时间线快照断言 | 已完成 |
 | P5 | ai_ingest + providers + e2e | PRD §5.5/6.5/6.13/§9；`AiReceiptDto{merchant,date,items[],surcharges[],discounts[]}` 解析 → `surcharge` 算 `final` → 待确认单（一图一单）→ 复用 P2 落库；不存原图，失败重试/跳过/转手动；`source=manual/ai/local` 保留；Riverpod `AsyncNotifier<AsyncValue>` 接线备 UI 用 | AI DTO 为纯解析，不调网络（网络后续接） | `test/e2e/full_loop_test.dart` 全绿：`建我→建账本→加2人→单账目→多账目含折扣→AI两单确认→时间线→结算→转账归零→预算→上月只读→删单级联` | 待施工 |
 
 ## 3. 分支、提交与测试门禁规范
@@ -85,4 +85,5 @@
 | 2026-09-26 | P1 | feat(p1)+test(p1) | T1-1~T1-5 全绿（30 tests 含回归）+ analyze 零问题，用户已确认测试方案与结果 |
 | 2026-09-26 | P2 | feat(p2)+test(p2) | T2-1~T2-6 全绿（44 tests 含回归）+ analyze 零问题，余数口径（并列取首位）已确认；修成员校验排序bug |
 | 2026-09-26 | P3 | feat(p3)+test(p3) | T3-1~T3-4 全绿（53 tests 含回归）+ analyze 零问题，实现零返工 |
+| 2026-09-26 | P4 | feat(p4)+test(p4) | T4-1~T4-4 全绿（61 tests 含回归）+ analyze 零问题；3 次测试算术错已纠正，实现未动 |
 | — | — | — | 待施工，本文档待验收 |
