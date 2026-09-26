@@ -28,3 +28,25 @@ final class ValidationException extends AppException {
 final class ArchivedReadOnlyException extends AppException {
   const ArchivedReadOnlyException(super.message);
 }
+
+/// AI 调用失败环节。
+enum AiFailureKind {
+  /// 未配置 API Key。
+  missingKey,
+
+  /// 网络层失败（断网、超时）。
+  network,
+
+  /// 服务端非 200。
+  badStatus,
+
+  /// 响应信封/JSON 非法。
+  badPayload,
+}
+
+/// AI 识别失败（调用方可降级到本地解析或手动填写）。
+final class AiException extends AppException {
+  const AiException(this.kind, super.message);
+
+  final AiFailureKind kind;
+}

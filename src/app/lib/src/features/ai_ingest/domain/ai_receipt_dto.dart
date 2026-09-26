@@ -8,6 +8,7 @@ class AiReceiptItem {
     required this.unitPrice,
     required this.amount,
     this.tag,
+    this.paidAmount,
   });
 
   final String name;
@@ -15,6 +16,9 @@ class AiReceiptItem {
   final num unitPrice;
   final num amount;
   final String? tag;
+
+  /// 单品实付（Python 侧 `paid_amount`，仅存档备查，不参与分摊计算）。
+  final num? paidAmount;
 
   factory AiReceiptItem.fromJson(Map<String, dynamic> json) {
     final String? name = json['name'] as String?;
@@ -28,6 +32,7 @@ class AiReceiptItem {
       unitPrice: json['unit_price'] as num? ?? amount,
       amount: amount,
       tag: json['tag'] as String?,
+      paidAmount: json['paid_amount'] as num?,
     );
   }
 }
