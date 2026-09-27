@@ -46,6 +46,19 @@ class AiRecognitionService {
     Uint8List bytes, {
     String mime = 'image/jpeg',
     int sourceImageIndex = 0,
+  }) async =>
+      (await parseImageBytesWithRaw(
+        bytes,
+        mime: mime,
+        sourceImageIndex: sourceImageIndex,
+      ))
+          .dto;
+
+  /// 解析图片字节，同时返回 AI 原文（探针存档用）。
+  Future<({AiReceiptDto dto, String rawContent})> parseImageBytesWithRaw(
+    Uint8List bytes, {
+    String mime = 'image/jpeg',
+    int sourceImageIndex = 0,
   }) async {
     config.requireConfigured();
     if (bytes.lengthInBytes > maxImageBytes) {
@@ -91,7 +104,7 @@ class AiRecognitionService {
     return false;
   }
 
-  Future<AiReceiptDto> _parseOnce(
+  Future<({AiReceiptDto dto, String rawContent})> _parseOnce(
     Uint8List bytes, {
     required String mime,
     required int sourceImageIndex,
@@ -147,10 +160,12 @@ class AiRecognitionService {
       );
     }
     String? stripped;
+    String rawContent = '';
     try {
       final Map<String, dynamic> envelope =
           jsonDecode(response.body) as Map<String, dynamic>;
       final String content = _extractContent(envelope);
+      rawContent = content;
       stripped = _stripFences(content);
       final Map<String, dynamic> data =
           jsonDecode(stripped) as Map<String, dynamic>;
@@ -161,7 +176,7 @@ class AiRecognitionService {
       if (dto.items.isEmpty) {
         throw const AiException(AiFailureKind.badPayload, 'AI 识别结果无商品');
       }
-      return dto;
+      return (dto: dto, rawContent: rawContent);
     } on AiException {
       rethrow;
     } on FormatException catch (e) {

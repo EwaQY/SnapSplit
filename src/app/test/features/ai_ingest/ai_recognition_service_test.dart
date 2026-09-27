@@ -124,6 +124,34 @@ void main() {
       expect(dto.items.single.paidAmount, 80.0);
       expect(dto.discounts, isEmpty);
     });
+
+    test('WithRaw 同时返回原文', () async {
+      final AiRecognitionService service = AiRecognitionService(
+        config: config,
+        client: MockClient((http.Request request) async {
+          return okJson(
+            envelopeOf(
+              jsonEncode(<String, dynamic>{
+                'merchant': '店',
+                'items': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'name': '水',
+                    'quantity': 1,
+                    'unit_price': 200,
+                    'amount': 200,
+                  },
+                ],
+              }),
+            ),
+          );
+        }),
+      );
+      addTearDown(service.close);
+      final ({AiReceiptDto dto, String rawContent}) result =
+          await service.parseImageBytesWithRaw(image);
+      expect(result.rawContent, contains('水'));
+      expect(result.dto.items.single.name, '水');
+    });
   });
 
   group('T6-2 类型化异常', () {
@@ -371,8 +399,7 @@ void main() {
       );
     });
 
-    test('称重小数 0.32 通过（c921 回归）', () async {
-      final AiRecognitionService service = AiRecognitionService(
+    test('称重小数 0.32 通过（c921 回归）', () async {      final AiRecognitionService service = AiRecognitionService(
         config: config,
         client: MockClient((http.Request request) async {
           return okJson(
