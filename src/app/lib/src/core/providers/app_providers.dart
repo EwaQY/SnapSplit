@@ -63,10 +63,7 @@ final timelineRepositoryProvider = Provider<TimelineRepository>(
 );
 
 final aiIngestRepositoryProvider = Provider<AiIngestRepository>(
-  (Ref ref) => AiIngestRepository(
-    ref.watch(shoppingRepositoryProvider),
-    ref.watch(tagRepositoryProvider),
-  ),
+  (Ref ref) => AiIngestRepository(ref.watch(shoppingRepositoryProvider)),
 );
 
 /// 账本列表。

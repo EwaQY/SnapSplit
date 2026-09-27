@@ -44,6 +44,8 @@
 | P4 | transfer / settlement / timeline | PRD §5.7/6.9–6.11；表 `transfer`：任意成员互转（默认我 → 对方）、不计消费只冲余额、仅当期可改删；`calcBoard` 输出我视角两两净额 + 全局应收/应付（不做最优转账）；timeline 按 `occurred_at` 倒序、单账目降维、多商品 ≤ 5 全展、> 5 前 3–4 +“共 N 项”、转账同层独立、历史标“已归档” | 结算为只读聚合，不写库 | 结算 → 转账 → 余额归零断言；时间线快照断言 | 已完成 |
 | P5 | ai_ingest + providers + e2e | PRD §5.5/6.5/6.13/§9；`AiReceiptDto{merchant,date,items[],surcharges[],discounts[]}` 解析 → `surcharge` 算 `final` → 待确认单（一图一单）→ 复用 P2 落库；不存原图，失败重试/跳过/转手动；`source=manual/ai/local` 保留；Riverpod `AsyncNotifier<AsyncValue>` 接线备 UI 用 | AI DTO 为纯解析，不调网络（网络后续接） | `test/e2e/full_loop_test.dart` 全绿：`建我→建账本→加2人→单账目→多账目含折扣→AI两单确认→时间线→结算→转账归零→预算→上月只读→删单级联` | 已完成 |
 | P7 | 日志审计 | 全 Repository 写入口 `audit`（成功 info/失败 error 原样抛）；单文件 `app.log` + 启动清 5 天前 + 5MB 截尾；`main` 全局捕获；文件落盘不走网络 | 读操作不记；阈值常量可调 | T8 全绿 + 全量回归 | 已完成 |
+| P8 | 确认页破模型 | AI 去标签 + 付款人默认提交人、分摊人/标签按件独立 + 单件增删改（详见 §8） | 三路统一待确认页；删剩最后一件拒掉 | T5-1 + P8 单件 3 用例 + E2E 重绿 + analyze 零问题 | 已完成 |
+| P9 | 收约束 | 活跃选择器 + 归档拒写 + 空账本删后不可查 + 入参去重 + DB 错误统一（详见 §9） | 历史展示不动；账本不归档 | 新增用例 + 全量回归绿 | 待施工 |
 
 ## 3. 分支、提交与测试门禁规范
 
@@ -92,6 +94,32 @@
 | 2026-09-27 | P7 | feat(p7)+test(p7) | T8 全绿（86 tests 含回归）+ analyze 零问题；17 个写入口审计埋点 |
 | 2026-09-27 | P7 追加 | fix(p7) | 测试日志文件化（test_logs/时间戳追加+5 天清理+去颜色码）；T8 补到 88 全绿 |
 | 2026-09-26 | P6 | feat(p6)+test(p6)+fix(p6) | T6 全绿（78 tests 含回归）+ analyze 零问题；Cline 兼容调用层，重试 1 次，4 张真图冒烟 3 成功 1 拦截 |
+
+## 8. P8 决议（2026-09-27 确认，破模型先行）
+
+* 背景：AI 不打标签（标签是用户主观认知，提前创建、确认页多选）；
+  确认页三路（AI/本地OCR/手动）统一模型，每件独立设付款人/参与人/分摊/标签；
+  账单内商品允许单件增删改。
+* 范围：
+  * AI 去标签：Prompt 不再要求输出 tag；`AiReceiptItem.tag` 删除（fromJson 忽略遗留 tag 键）；
+    `DraftItem.tagNames` 删除；`AiIngestRepository` 删除自动复用/新建标签逻辑，
+    `confirmDraftShopping` 改为按件收 `ConfirmedItem{按件 payer/participants/shares/note/tagIds}`，
+    构造器去 `TagRepository` 依赖；
+  * 确认页按件独立：付款人默认=提交账单的人（调用方逐件填入，底层保留按件 payer 字段以兼容手动多垫付）；
+    每件独立设参与人/分摊/标签，提交时逐件算分摊入库；
+  * 单件增删改：`addItemToShopping` / `updateExpenseItem` / `removeExpenseItem`
+   （仅当期；删剩最后一件拒掉请删整单；分摊重算、标签硬删重写）。
+* 验收：T5-1（付款人默认提交人、分摊人/标签按件独立）+ P8 单件 3 用例 + E2E 重绿 + analyze 零问题。
+* 结论（2026-09-27）：91 tests 全绿 + analyze 零问题。
+
+## 9. P9 决议（2026-09-27 确认，收约束后行，需 P8 绿）
+
+* 范围：
+  * 标签双保险：选择器仅返活跃；新建/编辑入参校验归档拒写，历史展示不动；
+  * 账本删除收紧：仅当月空账本可删，删后列表+详情均不可查；账本本身不归档；
+  * 入参去重：参与人/tagIds 统一去重后落库，防直调重复；
+  * DB 错误统一：非 2067 重名错误统一包友好错，日志保留原错。
+* 验收：新增用例（归档拒写/删后不可查/去重幂等/超支分支/折叠标/上月只读/5MB）+ 全量回归绿。
 
 ## 7. 数量列 INTEGER→REAL 切换（schema-v2）
 

@@ -1,13 +1,12 @@
 import '../../../core/errors/app_exception.dart';
 
-/// AI 识别商品行（原始信息，不持久化）。
+/// AI 识别商品行（原始信息，不持久化；标签由用户在确认页自选）。
 class AiReceiptItem {
   const AiReceiptItem({
     required this.name,
     required this.quantity,
     required this.unitPrice,
     required this.amount,
-    this.tag,
     this.paidAmount,
   });
 
@@ -15,7 +14,6 @@ class AiReceiptItem {
   final num quantity;
   final num unitPrice;
   final num amount;
-  final String? tag;
 
   /// 单品实付（Python 侧 `paid_amount`，仅存档备查，不参与分摊计算）。
   final num? paidAmount;
@@ -31,7 +29,6 @@ class AiReceiptItem {
       quantity: json['quantity'] as num? ?? 1,
       unitPrice: json['unit_price'] as num? ?? amount,
       amount: amount,
-      tag: json['tag'] as String?,
       paidAmount: json['paid_amount'] as num?,
     );
   }

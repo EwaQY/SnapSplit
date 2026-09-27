@@ -2,14 +2,13 @@ import '../../../core/errors/app_exception.dart';
 import '../../shopping/domain/surcharge_allocator.dart';
 import 'ai_receipt_dto.dart';
 
-/// 待确认账目：AI/确认页的可编辑中间态（未落库）。
+/// 待确认账目：AI/本地OCR/手动的商品草稿（未落库，无标签/分摊归属）。
 class DraftItem {
   const DraftItem({
     required this.name,
     required this.quantity,
     required this.unitPrice,
     required this.finalAmount,
-    this.tagNames = const <String>[],
   });
 
   final String name;
@@ -18,7 +17,6 @@ class DraftItem {
   final double quantity;
   final int unitPrice;
   final int finalAmount;
-  final List<String> tagNames;
 }
 
 /// 待确认购物单：一张图一个，未落库。
@@ -61,10 +59,6 @@ DraftShopping toDraftShopping(AiReceiptDto dto) {
           quantity: dto.items[i].quantity.toDouble(),
           unitPrice: (dto.items[i].unitPrice * 100).round(),
           finalAmount: baseAmounts[i] + deltas[i],
-          tagNames: <String>[
-            if (dto.items[i].tag != null && dto.items[i].tag!.trim().isNotEmpty)
-              dto.items[i].tag!.trim(),
-          ],
         ),
     ],
   );

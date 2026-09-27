@@ -215,6 +215,202 @@ class ShoppingRepository {
     },
   );
 
+  /// 单加一件商品（仅当前周期）。
+  Future<ShoppingDetail> addItemToShopping({
+    required String shoppingId,
+    required NewExpenseItem item,
+  }) => AppLogger.audit(
+    action: 'shopping.addItemToShopping',
+    entity: 'expense_item',
+    id: shoppingId,
+    run: () async {
+      final ShoppingDetail current = await getDetail(shoppingId);
+      _requireCurrentPeriod(current.header.occurredAt);
+      if (item.participantIds.isEmpty) {
+        throw ValidationException('账目参与人不能为空：${item.name}');
+      }
+      await _requireMembers(current.header.ledgerId, <String>{
+        item.payerId,
+        ...item.participantIds,
+      });
+      final int now = nowUnixSeconds();
+      await _db.transaction(() async {
+        await _insertItem(
+          shoppingId: shoppingId,
+          ledgerId: current.header.ledgerId,
+          item: item,
+          now: now,
+        );
+        await (_db.update(_db.shoppingLists)..where(
+              (ShoppingLists t) => t.id.equals(shoppingId),
+            )).write(ShoppingListsCompanion(updatedAt: Value(now)));
+      });
+      return getDetail(shoppingId);
+    },
+  );
+
+  /// 单改一件商品（仅当前周期；分摊/标签按传入重算重写）。
+  Future<ShoppingDetail> updateExpenseItem({
+    required String itemId,
+    String? name,
+    double? quantity,
+    int? unitPrice,
+    int? finalAmount,
+    String? payerId,
+    List<String>? participantIds,
+    Map<String, int>? shares,
+    String? note,
+    List<String>? tagIds,
+  }) => AppLogger.audit(
+    action: 'shopping.updateExpenseItem',
+    entity: 'expense_item',
+    id: itemId,
+    run: () async {
+      final ExpenseItem current =
+          await (_db.select(_db.expenseItems)..where(
+                (ExpenseItems t) =>
+                    t.id.equals(itemId) & t.deletedAt.isNull(),
+              )).getSingleOrNull() ??
+              (throw NotFoundException('账目不存在：$itemId'));
+      final ShoppingDetail parent = await getDetail(current.shoppingListId);
+      _requireCurrentPeriod(parent.header.occurredAt);
+      final String nextPayer = payerId ?? current.payerId;
+      final int nextFinal = finalAmount ?? current.finalAmount;
+      final List<String>? nextParticipants = participantIds;
+      final bool splitTouched =
+          nextParticipants != null || shares != null || payerId != null ||
+          finalAmount != null;
+      List<String> resolvedParticipants = nextParticipants ?? await _participantIdsOf(itemId);
+      if (resolvedParticipants.isEmpty) {
+        throw ValidationException('账目参与人不能为空：${name ?? current.name}');
+      }
+      await _requireMembers(parent.header.ledgerId, <String>{
+        nextPayer,
+        ...resolvedParticipants,
+      });
+      final int now = nowUnixSeconds();
+      await _db.transaction(() async {
+        await (_db.update(_db.expenseItems)..where(
+              (ExpenseItems t) => t.id.equals(itemId),
+            )).write(
+          ExpenseItemsCompanion(
+            name: name == null ? const Value.absent() : Value(name),
+            quantity: quantity == null ? const Value.absent() : Value(quantity),
+            unitPrice: unitPrice == null
+                ? const Value.absent()
+                : Value(unitPrice),
+            finalAmount: finalAmount == null
+                ? const Value.absent()
+                : Value(finalAmount),
+            payerId: payerId == null ? const Value.absent() : Value(payerId),
+            note: note == null ? const Value.absent() : Value(note),
+            updatedAt: Value(now),
+          ),
+        );
+        if (splitTouched) {
+          await (_db.update(_db.itemParticipants)..where(
+                (ItemParticipants t) =>
+                    t.expenseItemId.equals(itemId) & t.deletedAt.isNull(),
+              )).write(
+            ItemParticipantsCompanion(
+              deletedAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+          final Map<String, int> nextShares =
+              shares ??
+              <String, int>{
+                for (final SplitShare share in calcSplit(
+                  finalAmount: nextFinal,
+                  participantIds: resolvedParticipants,
+                  payerId: nextPayer,
+                ))
+                  share.userId: share.shareAmount,
+              };
+          for (final MapEntry<String, int> share in nextShares.entries) {
+            await _db
+                .into(_db.itemParticipants)
+                .insert(
+                  ItemParticipantsCompanion.insert(
+                    id: newId(),
+                    expenseItemId: itemId,
+                    userId: share.key,
+                    shareAmount: share.value,
+                    createdAt: now,
+                    updatedAt: now,
+                  ),
+                );
+          }
+        }
+        if (tagIds != null) {
+          await (_db.delete(_db.itemTags)..where(
+                (ItemTags t) => t.expenseItemId.equals(itemId),
+              )).go();
+          for (final String tagId in tagIds.toSet()) {
+            await _db
+                .into(_db.itemTags)
+                .insert(
+                  ItemTagsCompanion.insert(
+                    id: newId(),
+                    expenseItemId: itemId,
+                    tagId: tagId,
+                    createdAt: now,
+                  ),
+                );
+          }
+        }
+        await (_db.update(_db.shoppingLists)..where(
+              (ShoppingLists t) => t.id.equals(current.shoppingListId),
+            )).write(ShoppingListsCompanion(updatedAt: Value(now)));
+      });
+      return getDetail(current.shoppingListId);
+    },
+  );
+
+  /// 单删一件商品（仅当前周期；不允许删剩最后一件，请删整单）。
+  Future<ShoppingDetail> removeExpenseItem(String itemId) => AppLogger.audit(
+    action: 'shopping.removeExpenseItem',
+    entity: 'expense_item',
+    id: itemId,
+    run: () async {
+      final ExpenseItem current =
+          await (_db.select(_db.expenseItems)..where(
+                (ExpenseItems t) =>
+                    t.id.equals(itemId) & t.deletedAt.isNull(),
+              )).getSingleOrNull() ??
+              (throw NotFoundException('账目不存在：$itemId'));
+      final ShoppingDetail parent = await getDetail(current.shoppingListId);
+      _requireCurrentPeriod(parent.header.occurredAt);
+      if (parent.items.length <= 1) {
+        throw ValidationException('购物单至少包含一个账目，请删除整单');
+      }
+      final int now = nowUnixSeconds();
+      await _db.transaction(() async {
+        await (_db.update(_db.expenseItems)..where(
+              (ExpenseItems t) => t.id.equals(itemId),
+            )).write(
+          ExpenseItemsCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+        );
+        await (_db.update(_db.itemParticipants)..where(
+              (ItemParticipants t) =>
+                  t.expenseItemId.equals(itemId) & t.deletedAt.isNull(),
+            )).write(
+          ItemParticipantsCompanion(
+            deletedAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+        await (_db.delete(_db.itemTags)..where(
+              (ItemTags t) => t.expenseItemId.equals(itemId),
+            )).go();
+        await (_db.update(_db.shoppingLists)..where(
+              (ShoppingLists t) => t.id.equals(current.shoppingListId),
+            )).write(ShoppingListsCompanion(updatedAt: Value(now)));
+      });
+      return getDetail(current.shoppingListId);
+    },
+  );
+
   /// 取整单明细（含已软删单头校验，不存在抛 [NotFoundException]）。
   Future<ShoppingDetail> getDetail(String shoppingId) async {
     final ShoppingList? header =
@@ -363,6 +559,15 @@ class ShoppingRepository {
   }
 
   /// 校验用户集合均为账本活跃成员。
+  Future<List<String>> _participantIdsOf(String itemId) async {
+    final List<ItemParticipant> rows =
+        await (_db.select(_db.itemParticipants)..where(
+              (ItemParticipants t) =>
+                  t.expenseItemId.equals(itemId) & t.deletedAt.isNull(),
+            )).get();
+    return <String>[for (final ItemParticipant e in rows) e.userId];
+  }
+
   Future<void> _requireMembers(String ledgerId, Set<String> userIds) async {
     final List<LedgerMember> members =
         await (_db.select(_db.ledgerMembers)..where(
