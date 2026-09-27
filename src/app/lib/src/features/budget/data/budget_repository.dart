@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/tables.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/utils/app_time.dart';
 import '../../../core/utils/ids.dart';
 
@@ -27,53 +28,60 @@ class BudgetRepository {
     required int year,
     required int month,
     required int amountCents,
-  }) async {
-    if (month < 1 || month > 12) {
-      throw ValidationException('月份非法：$month');
-    }
-    if (amountCents < 0) {
-      throw ValidationException('预算金额不能为负');
-    }
-    final ({int month, int year}) now = yearMonthOf(nowUnixSeconds());
-    if (year < now.year || (year == now.year && month < now.month)) {
-      throw ArchivedReadOnlyException('历史周期预算不可变');
-    }
-    final int nowSeconds = nowUnixSeconds();
-    final Budget? existing =
-        await (_db.select(_db.budgets)
-              ..where(
-                (Budgets t) =>
-                    t.userId.equals(userId) &
-                    t.year.equals(year) &
-                    t.month.equals(month) &
-                    t.deletedAt.isNull(),
-              )).getSingleOrNull();
-    if (existing == null) {
-      final String id = newId();
-      await _db
-          .into(_db.budgets)
-          .insert(
-            BudgetsCompanion.insert(
-              id: id,
-              userId: userId,
-              amount: amountCents,
-              year: year,
-              month: month,
-              createdAt: nowSeconds,
-              updatedAt: nowSeconds,
-            ),
-          );
+  }) => AppLogger.audit(
+    action: 'budget.setBudget',
+    entity: 'budget',
+    run: () async {
+      if (month < 1 || month > 12) {
+        throw ValidationException('月份非法：$month');
+      }
+      if (amountCents < 0) {
+        throw ValidationException('预算金额不能为负');
+      }
+      final ({int month, int year}) now = yearMonthOf(nowUnixSeconds());
+      if (year < now.year || (year == now.year && month < now.month)) {
+        throw ArchivedReadOnlyException('历史周期预算不可变');
+      }
+      final int nowSeconds = nowUnixSeconds();
+      final Budget? existing =
+          await (_db.select(_db.budgets)
+                ..where(
+                  (t) =>
+                      t.userId.equals(userId) &
+                      t.year.equals(year) &
+                      t.month.equals(month) &
+                      t.deletedAt.isNull(),
+                )).getSingleOrNull();
+      if (existing == null) {
+        final String id = newId();
+        await _db
+            .into(_db.budgets)
+            .insert(
+              BudgetsCompanion.insert(
+                id: id,
+                userId: userId,
+                amount: amountCents,
+                year: year,
+                month: month,
+                createdAt: nowSeconds,
+                updatedAt: nowSeconds,
+              ),
+            );
+        return (_db.select(_db.budgets)
+              ..where((t) => t.id.equals(id))).getSingle();
+      }
+      await (_db.update(_db.budgets)..where(
+            (t) => t.id.equals(existing.id),
+          )).write(
+        BudgetsCompanion(
+          amount: Value(amountCents),
+          updatedAt: Value(nowSeconds),
+        ),
+      );
       return (_db.select(_db.budgets)
-            ..where((Budgets t) => t.id.equals(id))).getSingle();
-    }
-    await (_db.update(_db.budgets)..where(
-          (Budgets t) => t.id.equals(existing.id),
-        )).write(
-      BudgetsCompanion(amount: Value(amountCents), updatedAt: Value(nowSeconds)),
-    );
-    return (_db.select(_db.budgets)
-          ..where((Budgets t) => t.id.equals(existing.id))).getSingle();
-  }
+            ..where((t) => t.id.equals(existing.id))).getSingle();
+    },
+  );
 
   /// 取某月预算，未设置返回 null。
   Future<Budget?> getBudget({

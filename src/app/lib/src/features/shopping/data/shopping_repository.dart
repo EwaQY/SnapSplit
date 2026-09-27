@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/tables.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/utils/app_time.dart';
 import '../../../core/utils/ids.dart';
 import '../domain/split_calculator.dart';
@@ -81,10 +82,13 @@ class ShoppingRepository {
     String source = 'manual',
     int? occurredAt,
     required List<NewExpenseItem> items,
-  }) async {
-    if (items.isEmpty) {
-      throw ValidationException('购物单至少包含一个账目');
-    }
+  }) => AppLogger.audit(
+    action: 'shopping.createShoppingList',
+    entity: 'shopping_list',
+    run: () async {
+      if (items.isEmpty) {
+        throw ValidationException('购物单至少包含一个账目');
+      }
     final int occurred = occurredAt ?? nowUnixSeconds();
     _requireCurrentPeriod(occurred);
     for (final NewExpenseItem item in items) {
@@ -129,7 +133,8 @@ class ShoppingRepository {
       }
     });
     return getDetail(shoppingId);
-  }
+    },
+  );
 
   /// 整单替换式编辑（仅当前周期；历史周期抛 [ArchivedReadOnlyException]）。
   Future<ShoppingDetail> updateShoppingList({
@@ -139,8 +144,12 @@ class ShoppingRepository {
     String? note,
     int? occurredAt,
     List<NewExpenseItem>? items,
-  }) async {
-    final ShoppingDetail current = await getDetail(shoppingId);
+  }) => AppLogger.audit(
+    action: 'shopping.updateShoppingList',
+    entity: 'shopping_list',
+    id: shoppingId,
+    run: () async {
+      final ShoppingDetail current = await getDetail(shoppingId);
     _requireCurrentPeriod(current.header.occurredAt);
     final int occurred = occurredAt ?? current.header.occurredAt;
     _requireCurrentPeriod(occurred);
@@ -181,24 +190,30 @@ class ShoppingRepository {
       }
     });
     return getDetail(shoppingId);
-  }
+    },
+  );
 
   /// 软删整单（仅当前周期），级联子账目/分摊，硬删标签关联。
-  Future<void> softDeleteShoppingList(String shoppingId) async {
-    final ShoppingDetail current = await getDetail(shoppingId);
-    _requireCurrentPeriod(current.header.occurredAt);
-    await _db.transaction(() async {
-      await _removeItems(shoppingId, nowUnixSeconds());
-      await (_db.update(_db.shoppingLists)..where(
-            (ShoppingLists t) => t.id.equals(shoppingId),
-          )).write(
-        ShoppingListsCompanion(
-          deletedAt: Value(nowUnixSeconds()),
-          updatedAt: Value(nowUnixSeconds()),
-        ),
-      );
-    });
-  }
+  Future<void> softDeleteShoppingList(String shoppingId) => AppLogger.audit(
+    action: 'shopping.softDeleteShoppingList',
+    entity: 'shopping_list',
+    id: shoppingId,
+    run: () async {
+      final ShoppingDetail current = await getDetail(shoppingId);
+      _requireCurrentPeriod(current.header.occurredAt);
+      await _db.transaction(() async {
+        await _removeItems(shoppingId, nowUnixSeconds());
+        await (_db.update(_db.shoppingLists)..where(
+              (ShoppingLists t) => t.id.equals(shoppingId),
+            )).write(
+          ShoppingListsCompanion(
+            deletedAt: Value(nowUnixSeconds()),
+            updatedAt: Value(nowUnixSeconds()),
+          ),
+        );
+      });
+    },
+  );
 
   /// 取整单明细（含已软删单头校验，不存在抛 [NotFoundException]）。
   Future<ShoppingDetail> getDetail(String shoppingId) async {

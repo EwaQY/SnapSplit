@@ -4,6 +4,7 @@ import 'package:sqlite3/sqlite3.dart' show SqliteException;
 import '../../../core/database/app_database.dart';
 import '../../../core/database/tables.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/utils/app_time.dart';
 import '../../../core/utils/ids.dart';
 
@@ -25,39 +26,43 @@ class LedgerRepository {
   Future<Ledger> createLedger({
     required String name,
     required String ownerUserId,
-  }) async {
-    if (name.trim().isEmpty) {
-      throw ValidationException('账本名称不能为空');
-    }
-    final int now = nowUnixSeconds();
-    final String ledgerId = newId();
-    await _db.transaction(() async {
-      await _db
-          .into(_db.ledgers)
-          .insert(
-            LedgersCompanion.insert(
-              id: ledgerId,
-              name: name,
-              ownerUserId: ownerUserId,
-              createdAt: now,
-              updatedAt: now,
-            ),
-          );
-      await _db
-          .into(_db.ledgerMembers)
-          .insert(
-            LedgerMembersCompanion.insert(
-              id: newId(),
-              ledgerId: ledgerId,
-              userId: ownerUserId,
-              joinedAt: now,
-              createdAt: now,
-              updatedAt: now,
-            ),
-          );
-    });
-    return getById(ledgerId);
-  }
+  }) => AppLogger.audit(
+    action: 'ledger.createLedger',
+    entity: 'ledger',
+    run: () async {
+      if (name.trim().isEmpty) {
+        throw ValidationException('账本名称不能为空');
+      }
+      final int now = nowUnixSeconds();
+      final String ledgerId = newId();
+      await _db.transaction(() async {
+        await _db
+            .into(_db.ledgers)
+            .insert(
+              LedgersCompanion.insert(
+                id: ledgerId,
+                name: name,
+                ownerUserId: ownerUserId,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+        await _db
+            .into(_db.ledgerMembers)
+            .insert(
+              LedgerMembersCompanion.insert(
+                id: newId(),
+                ledgerId: ledgerId,
+                userId: ownerUserId,
+                joinedAt: now,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+      });
+      return getById(ledgerId);
+    },
+  );
 
   /// 取账本，不存在抛 [NotFoundException]。
   Future<Ledger> getById(String id) async {
@@ -108,86 +113,103 @@ class LedgerRepository {
   Future<LedgerMemberView> addMember({
     required String ledgerId,
     required String userId,
-  }) async {
-    await getById(ledgerId);
-    final int now = nowUnixSeconds();
-    final String memberId = newId();
-    try {
-      await _db
-          .into(_db.ledgerMembers)
-          .insert(
-            LedgerMembersCompanion.insert(
-              id: memberId,
-              ledgerId: ledgerId,
-              userId: userId,
-              joinedAt: now,
-              createdAt: now,
-              updatedAt: now,
-            ),
-          );
-    } on SqliteException catch (e) {
-      if (e.extendedResultCode == 2067) {
-        throw ValidationException('成员已在账本内：$userId');
+  }) => AppLogger.audit(
+    action: 'ledger.addMember',
+    entity: 'ledger_member',
+    run: () async {
+      await getById(ledgerId);
+      final int now = nowUnixSeconds();
+      final String memberId = newId();
+      try {
+        await _db
+            .into(_db.ledgerMembers)
+            .insert(
+              LedgerMembersCompanion.insert(
+                id: memberId,
+                ledgerId: ledgerId,
+                userId: userId,
+                joinedAt: now,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+      } on SqliteException catch (e) {
+        if (e.extendedResultCode == 2067) {
+          throw ValidationException('成员已在账本内：$userId');
+        }
+        rethrow;
       }
-      rethrow;
-    }
-    final LedgerMember member =
-        await (_db.select(_db.ledgerMembers)
-              ..where(
-                (LedgerMembers t) => t.id.equals(memberId),
-              )).getSingle();
-    final User user = await (_db.select(
-      _db.users,
-    )..where((Users t) => t.id.equals(userId))).getSingle();
-    return (member: member, user: user);
-  }
+      final LedgerMember member =
+          await (_db.select(_db.ledgerMembers)
+                ..where(
+                  (t) => t.id.equals(memberId),
+                )).getSingle();
+      final User user = await (_db.select(
+        _db.users,
+      )..where((t) => t.id.equals(userId))).getSingle();
+      return (member: member, user: user);
+    },
+  );
 
   /// 重命名成员（改底层 `user` 昵称，影响其所在全部账本）。
   Future<User> renameMember({
     required String ledgerId,
     required String userId,
     required String nickname,
-  }) async {
-    if (nickname.trim().isEmpty) {
-      throw ValidationException('成员昵称不能为空');
-    }
-    final List<LedgerMemberView> members = await listMembers(
-      ledgerId,
-      includeDeleted: true,
-    );
-    if (!members.any((LedgerMemberView view) => view.user.id == userId)) {
-      throw NotFoundException('成员不在账本内：$userId');
-    }
-    await (_db.update(_db.users)..where(
-          (Users t) => t.id.equals(userId),
-        )).write(
-      UsersCompanion(nickname: Value(nickname), updatedAt: Value(nowUnixSeconds())),
-    );
-    return (_db.select(
-      _db.users,
-    )..where((Users t) => t.id.equals(userId))).getSingle();
-  }
+  }) => AppLogger.audit(
+    action: 'ledger.renameMember',
+    entity: 'user',
+    id: userId,
+    run: () async {
+      if (nickname.trim().isEmpty) {
+        throw ValidationException('成员昵称不能为空');
+      }
+      final List<LedgerMemberView> members = await listMembers(
+        ledgerId,
+        includeDeleted: true,
+      );
+      if (!members.any((LedgerMemberView view) => view.user.id == userId)) {
+        throw NotFoundException('成员不在账本内：$userId');
+      }
+      await (_db.update(_db.users)..where(
+            (t) => t.id.equals(userId),
+          )).write(
+        UsersCompanion(
+          nickname: Value(nickname),
+          updatedAt: Value(nowUnixSeconds()),
+        ),
+      );
+      return (_db.select(
+        _db.users,
+      )..where((t) => t.id.equals(userId))).getSingle();
+    },
+  );
 
   /// 软删除成员（只写 `ledger_member.deleted_at`，历史账目引用保留）。
   Future<void> softDeleteMember({
     required String ledgerId,
     required String userId,
-  }) async {
-    final int now = nowUnixSeconds();
-    final int changed =
-        await (_db.update(_db.ledgerMembers)..where(
-              (LedgerMembers t) =>
-                  t.ledgerId.equals(ledgerId) &
-                  t.userId.equals(userId) &
-                  t.deletedAt.isNull(),
-            )).write(
-          LedgerMembersCompanion(
-            deletedAt: Value(now),
-            updatedAt: Value(now),
-          ),
-        );
-    if (changed == 0) {
-      throw NotFoundException('成员不在账本内或已删除：$userId');
-    }
-  }
+  }) => AppLogger.audit(
+    action: 'ledger.softDeleteMember',
+    entity: 'ledger_member',
+    id: userId,
+    run: () async {
+      final int now = nowUnixSeconds();
+      final int changed =
+          await (_db.update(_db.ledgerMembers)..where(
+                (t) =>
+                    t.ledgerId.equals(ledgerId) &
+                    t.userId.equals(userId) &
+                    t.deletedAt.isNull(),
+              )).write(
+            LedgerMembersCompanion(
+              deletedAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+      if (changed == 0) {
+        throw NotFoundException('成员不在账本内或已删除：$userId');
+      }
+    },
+  );
 }

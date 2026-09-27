@@ -1,5 +1,6 @@
 import '../../../core/database/app_database.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../shopping/data/shopping_repository.dart';
 import '../../tags/data/tag_repository.dart';
 import '../domain/ai_ingest_service.dart';
@@ -21,39 +22,43 @@ class AiIngestRepository {
     required List<String> participantIds,
     String? title,
     int? occurredAt,
-  }) async {
-    if (draft.items.isEmpty) {
-      throw ValidationException('待确认单至少包含一个账目');
-    }
-    final List<NewExpenseItem> items = <NewExpenseItem>[];
-    for (final DraftItem item in draft.items) {
-      final List<String> tagIds = <String>[];
-      for (final String name in item.tagNames.toSet()) {
-        tagIds.add(await _resolveTagId(name));
+  }) => AppLogger.audit(
+    action: 'ai.confirmDraftShopping',
+    entity: 'shopping_list',
+    run: () async {
+      if (draft.items.isEmpty) {
+        throw ValidationException('待确认单至少包含一个账目');
       }
-      items.add(
-        (
-          name: item.name,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          finalAmount: item.finalAmount,
-          payerId: payerId,
-          participantIds: participantIds,
-          shares: null,
-          note: null,
-          tagIds: tagIds,
-        ),
+      final List<NewExpenseItem> items = <NewExpenseItem>[];
+      for (final DraftItem item in draft.items) {
+        final List<String> tagIds = <String>[];
+        for (final String name in item.tagNames.toSet()) {
+          tagIds.add(await _resolveTagId(name));
+        }
+        items.add(
+          (
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            finalAmount: item.finalAmount,
+            payerId: payerId,
+            participantIds: participantIds,
+            shares: null,
+            note: null,
+            tagIds: tagIds,
+          ),
+        );
+      }
+      return _shopping.createShoppingList(
+        ledgerId: ledgerId,
+        title: title ?? draft.merchant ?? 'AI 识别购物单',
+        merchant: draft.merchant,
+        source: 'ai',
+        occurredAt: occurredAt,
+        items: items,
       );
-    }
-    return _shopping.createShoppingList(
-      ledgerId: ledgerId,
-      title: title ?? draft.merchant ?? 'AI 识别购物单',
-      merchant: draft.merchant,
-      source: 'ai',
-      occurredAt: occurredAt,
-      items: items,
-    );
-  }
+    },
+  );
 
   Future<String> _resolveTagId(String name) async {
     final List<Tag> active = await _tags.listAllTags();

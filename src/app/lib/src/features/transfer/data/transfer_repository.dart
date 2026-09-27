@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/tables.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/utils/app_time.dart';
 import '../../../core/utils/ids.dart';
 
@@ -24,8 +25,11 @@ class TransferRepository {
     required int amountCents,
     int? occurredAt,
     String? note,
-  }) async {
-    final int occurred = occurredAt ?? nowUnixSeconds();
+  }) => AppLogger.audit(
+    action: 'transfer.createTransfer',
+    entity: 'transfer',
+    run: () async {
+      final int occurred = occurredAt ?? nowUnixSeconds();
     _requireCurrentPeriod(occurred);
     _requireValidParties(fromUserId, toUserId, amountCents);
     await _requireMembers(ledgerId, <String>{fromUserId, toUserId});
@@ -47,7 +51,8 @@ class TransferRepository {
           ),
         );
     return getById(id);
-  }
+    },
+  );
 
   /// 取转账记录，不存在抛 [NotFoundException]。
   Future<Transfer> getById(String id) async {
@@ -68,8 +73,12 @@ class TransferRepository {
     int? amountCents,
     int? occurredAt,
     String? note,
-  }) async {
-    final Transfer current = await getById(id);
+  }) => AppLogger.audit(
+    action: 'transfer.updateTransfer',
+    entity: 'transfer',
+    id: id,
+    run: () async {
+      final Transfer current = await getById(id);
     _requireCurrentPeriod(current.occurredAt);
     final int occurred = occurredAt ?? current.occurredAt;
     _requireCurrentPeriod(occurred);
@@ -87,19 +96,25 @@ class TransferRepository {
       ),
     );
     return getById(id);
-  }
+    },
+  );
 
   /// 软删转账记录（仅当前周期）。
-  Future<void> softDeleteTransfer(String id) async {
-    final Transfer current = await getById(id);
-    _requireCurrentPeriod(current.occurredAt);
-    final int now = nowUnixSeconds();
-    await (_db.update(_db.transfers)..where(
-          (Transfers t) => t.id.equals(id),
-        )).write(
-      TransfersCompanion(deletedAt: Value(now), updatedAt: Value(now)),
-    );
-  }
+  Future<void> softDeleteTransfer(String id) => AppLogger.audit(
+    action: 'transfer.softDeleteTransfer',
+    entity: 'transfer',
+    id: id,
+    run: () async {
+      final Transfer current = await getById(id);
+      _requireCurrentPeriod(current.occurredAt);
+      final int now = nowUnixSeconds();
+      await (_db.update(_db.transfers)..where(
+            (t) => t.id.equals(id),
+          )).write(
+        TransfersCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+      );
+    },
+  );
 
   /// 账本转账列表（发生时间倒序，默认排除软删）。
   Future<List<Transfer>> listTransfers(String ledgerId) =>
