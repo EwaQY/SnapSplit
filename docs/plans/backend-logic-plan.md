@@ -90,6 +90,7 @@
 | 2026-09-27 | P6 | feat(p6)+test(p6)+fix(p6)×2 | T6 全绿 + AI 真图冒烟；Cline 兼容调用层，重试与数量校验 |
 | 2026-09-27 | schema-v2 | feat+test | 数量 REAL + 迁移 v2 + prompt 归一化；T7 全绿（81 tests） |
 | 2026-09-27 | P7 | feat(p7)+test(p7) | T8 全绿（86 tests 含回归）+ analyze 零问题；17 个写入口审计埋点 |
+| 2026-09-27 | P7 追加 | fix(p7) | 测试日志文件化（test_logs/时间戳追加+5 天清理+去颜色码）；T8 补到 88 全绿 |
 | 2026-09-26 | P6 | feat(p6)+test(p6)+fix(p6) | T6 全绿（78 tests 含回归）+ analyze 零问题；Cline 兼容调用层，重试 1 次，4 张真图冒烟 3 成功 1 拦截 |
 
 ## 7. 数量列 INTEGER→REAL 切换（schema-v2）

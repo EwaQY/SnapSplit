@@ -66,7 +66,7 @@ void main() {
         ),
         isTrue,
       );
-      AppLogger.testMode();
+      AppLogger.testMode(memory: <String>[]);
     });
   });
 
@@ -75,7 +75,7 @@ void main() {
       final Directory tmp = await Directory.systemTemp.createTemp('logfile');
       addTearDown(() async {
         await AppLogger.close();
-        AppLogger.testMode();
+        AppLogger.testMode(memory: <String>[]);
         await tmp.delete(recursive: true);
       });
       await AppLogger.init(logDir: tmp);
@@ -89,7 +89,64 @@ void main() {
         (await file.readAsString()).contains('op=user.ensureSelf'),
         isTrue,
       );
-      AppLogger.testMode();
+      AppLogger.testMode(memory: <String>[]);
+    });
+  });
+
+  group('T8-4 测试日志文件', () {
+    test('cleanupTestLogs 只删 5 天前文件', () async {
+      final Directory tmp = await Directory.systemTemp.createTemp('testlogs');
+      addTearDown(() => tmp.delete(recursive: true));
+      final File old = File('${tmp.path}/old_test.log')..writeAsStringSync('x');
+      final File fresh = File('${tmp.path}/new_test.log')
+        ..writeAsStringSync('y');
+      old.setLastModifiedSync(
+        DateTime.now().subtract(const Duration(days: 6)),
+      );
+      AppLogger.cleanupTestLogs(tmp);
+      expect(old.existsSync(), isFalse);
+      expect(fresh.existsSync(), isTrue);
+    });
+
+    test('testMode 文件追加保留历史行', () async {
+      final Directory backup = Directory.current;
+      final Directory tmp = await Directory.systemTemp.createTemp('testmode');
+      addTearDown(() async {
+        await AppLogger.close();
+        AppLogger.testMode(memory: <String>[]);
+        await tmp.delete(recursive: true);
+      });
+      // 切到临时目录，避免污染仓库 test_logs。
+      Directory.current = tmp;
+      try {
+        AppLogger.testMode();
+        await AppLogger.audit(
+          action: 'probe.one',
+          run: () async => 1,
+        );
+        await AppLogger.close();
+        AppLogger.testMode();
+        await AppLogger.audit(
+          action: 'probe.two',
+          run: () async => 2,
+        );
+        await AppLogger.close();
+        final List<FileSystemEntity> logs =
+            tmp
+                .listSync()
+                .whereType<Directory>()
+                .expand((Directory d) => d.listSync())
+                .toList();
+        final File log = logs.whereType<File>().singleWhere(
+          (File f) => f.path.endsWith('.log'),
+        );
+        final String content = await log.readAsString();
+        expect(content, contains('probe.one'));
+        expect(content, contains('probe.two'));
+      } finally {
+        Directory.current = backup;
+      }
+      AppLogger.testMode(memory: <String>[]);
     });
   });
 }

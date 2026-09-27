@@ -17,7 +17,7 @@ class AppLogger {
   static const int maxBytes = 5 * 1024 * 1024;
 
   static Logger _log = Logger(
-    printer: SimplePrinter(),
+    printer: SimplePrinter(colors: false),
     filter: _AllowAllFilter(),
   );
   static IOSink? _sink;
@@ -31,7 +31,7 @@ class AppLogger {
     await cleanupLogFile(file);
     _sink = file.openWrite(mode: FileMode.append);
     _log = Logger(
-      printer: SimplePrinter(),
+      printer: SimplePrinter(colors: false),
       filter: _AllowAllFilter(),
       output: MultiOutput(<LogOutput>[
         ConsoleOutput(),
@@ -40,15 +40,73 @@ class AppLogger {
     );
   }
 
-  /// 单测模式：静默，可选注入内存输出断言。
+  /// 单测模式：控制台静默，审计行追加写测试日志文件。
+  ///
+  /// 文件按轮次命名（`test_logs/test_YYYYMMDD_HHMMSS.log`，同轮并发测试
+  /// 共用一个文件，行乱序但完整）；每次进入清理 5 天前文件。
+  /// 传 [memory] 则改写内存（断言用，不碰文件）。
   static void testMode({List<String>? memory}) {
     unawaited(_sink?.flush().catchError((Object _) {}));
     _sink = null;
+    if (memory != null) {
+      _log = Logger(
+        printer: SimplePrinter(colors: false),
+        filter: _AllowAllFilter(),
+        output: _MemoryOutput(memory),
+      );
+      return;
+    }
+    IOSink? sink;
+    try {
+      final Directory dir = Directory('test_logs')..createSync();
+      cleanupTestLogs(dir);
+      sink = File(
+        '${dir.path}${Platform.pathSeparator}${_testRunName()}.log',
+      ).openWrite(mode: FileMode.append);
+    } catch (_) {
+      // 测试日志写不了就退化为静默，绝不影响测试。
+    }
+    _sink = sink;
     _log = Logger(
-      printer: SimplePrinter(),
-      filter: _TestFilter(memory == null),
-      output: memory == null ? ConsoleOutput() : _MemoryOutput(memory),
+      printer: SimplePrinter(colors: false),
+      filter: sink == null ? _TestFilter(true) : _AllowAllFilter(),
+      output:
+          sink == null
+              ? _MemoryOutput(_dropped)
+              : _SinkOutput(() => _sink),
     );
+  }
+
+  static final List<String> _dropped = <String>[];
+
+  /// 本轮测试日志名（时间戳；同轮并发 isolate 共用）。
+  static String _testRunName() {
+    final DateTime now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return 'test_${now.year}${two(now.month)}${two(now.day)}_'
+        '${two(now.hour)}${two(now.minute)}${two(now.second)}';
+  }
+
+  /// 清理测试日志目录：删 5 天前文件。纯逻辑，可单测。
+  static void cleanupTestLogs(Directory dir) {
+    if (!dir.existsSync()) {
+      return;
+    }
+    final DateTime cutoff = DateTime.now().subtract(
+      const Duration(days: retainDays),
+    );
+    for (final FileSystemEntity entity in dir.listSync()) {
+      if (entity is! File || !entity.path.endsWith('.log')) {
+        continue;
+      }
+      try {
+        if (entity.lastModifiedSync().isBefore(cutoff)) {
+          entity.deleteSync();
+        }
+      } catch (_) {
+        // 删不掉不管。
+      }
+    }
   }
 
   /// 审计写操作：计时 + 成功/失败日志，异常原样抛出。
