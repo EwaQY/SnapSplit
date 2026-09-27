@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:snap_split/src/core/logging/app_logger.dart';
+
 import 'package:snap_split/src/core/database/app_database.dart';
 import 'package:snap_split/src/core/utils/app_time.dart';
 import 'package:snap_split/src/features/ai_ingest/data/ai_ingest_repository.dart';
@@ -20,6 +22,7 @@ import 'package:snap_split/src/features/transfer/data/transfer_repository.dart';
 /// 时间线→结算→转账归零→预算→上月只读→删单级联。
 void main() {
   test('full loop', () async {
+    AppLogger.testMode();
     final AppDatabase db = AppDatabase.memory();
     addTearDown(db.close);
     final UserRepository users = UserRepository(db);

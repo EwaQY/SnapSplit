@@ -43,6 +43,7 @@
 | P3 | surcharge / tag / budget / period | PRD §6.7/6.8/6.12/6.14–6.15；`surcharge` 按原始金额比例摊入（四舍五入、差额给最大商品，单商品直接计入，不持久化中间字段）；表 `tag, item_tag` 全局共享、新建改名归档（`archived_at`），归档后新单不可选、历史引用保留，`item_tag` 无软删随账目硬删；表 `budget` 自然月全局粒度、`我作 payer 求和 / 预算`、超支仅警告；`isArchived` 历史周期抛 `ArchivedReadOnly` 禁写 | UI 仅归档不删除标签 | 归档/禁写/预算进度单测绿 | 已完成 |
 | P4 | transfer / settlement / timeline | PRD §5.7/6.9–6.11；表 `transfer`：任意成员互转（默认我 → 对方）、不计消费只冲余额、仅当期可改删；`calcBoard` 输出我视角两两净额 + 全局应收/应付（不做最优转账）；timeline 按 `occurred_at` 倒序、单账目降维、多商品 ≤ 5 全展、> 5 前 3–4 +“共 N 项”、转账同层独立、历史标“已归档” | 结算为只读聚合，不写库 | 结算 → 转账 → 余额归零断言；时间线快照断言 | 已完成 |
 | P5 | ai_ingest + providers + e2e | PRD §5.5/6.5/6.13/§9；`AiReceiptDto{merchant,date,items[],surcharges[],discounts[]}` 解析 → `surcharge` 算 `final` → 待确认单（一图一单）→ 复用 P2 落库；不存原图，失败重试/跳过/转手动；`source=manual/ai/local` 保留；Riverpod `AsyncNotifier<AsyncValue>` 接线备 UI 用 | AI DTO 为纯解析，不调网络（网络后续接） | `test/e2e/full_loop_test.dart` 全绿：`建我→建账本→加2人→单账目→多账目含折扣→AI两单确认→时间线→结算→转账归零→预算→上月只读→删单级联` | 已完成 |
+| P7 | 日志审计 | 全 Repository 写入口 `audit`（成功 info/失败 error 原样抛）；单文件 `app.log` + 启动清 5 天前 + 5MB 截尾；`main` 全局捕获；文件落盘不走网络 | 读操作不记；阈值常量可调 | T8 全绿 + 全量回归 | 已完成 |
 
 ## 3. 分支、提交与测试门禁规范
 
@@ -86,6 +87,9 @@
 | 2026-09-26 | P3 | feat(p3)+test(p3) | T3-1~T3-4 全绿（53 tests 含回归）+ analyze 零问题，实现零返工 |
 | 2026-09-26 | P4 | feat(p4)+test(p4) | T4-1~T4-4 全绿（61 tests 含回归）+ analyze 零问题；3 次测试算术错已纠正，实现未动 |
 | 2026-09-26 | P5 | feat(p5)+test(p5) | T5-1~T5-4 全绿（67 tests 含回归）+ analyze 零问题；riverpod_generator与drift不兼容改手写providers |
+| 2026-09-27 | P6 | feat(p6)+test(p6)+fix(p6)×2 | T6 全绿 + AI 真图冒烟；Cline 兼容调用层，重试与数量校验 |
+| 2026-09-27 | schema-v2 | feat+test | 数量 REAL + 迁移 v2 + prompt 归一化；T7 全绿（81 tests） |
+| 2026-09-27 | P7 | feat(p7)+test(p7) | T8 全绿（86 tests 含回归）+ analyze 零问题；17 个写入口审计埋点 |
 | 2026-09-26 | P6 | feat(p6)+test(p6)+fix(p6) | T6 全绿（78 tests 含回归）+ analyze 零问题；Cline 兼容调用层，重试 1 次，4 张真图冒烟 3 成功 1 拦截 |
 
 ## 7. 数量列 INTEGER→REAL 切换（schema-v2）

@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:snap_split/src/core/logging/app_logger.dart';
+
 import 'package:snap_split/src/core/database/app_database.dart';
 import 'package:snap_split/src/core/errors/app_exception.dart';
 import 'package:snap_split/src/features/ledger/data/ledger_repository.dart';
@@ -19,6 +21,7 @@ void main() {
   late Ledger ledger;
 
   setUp(() async {
+    AppLogger.testMode();
     db = AppDatabase.memory();
     users = UserRepository(db);
     ledgers = LedgerRepository(db);

@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:snap_split/src/core/logging/app_logger.dart';
+
 import 'package:snap_split/src/core/database/app_database.dart';
 import 'package:snap_split/src/core/errors/app_exception.dart';
 import 'package:snap_split/src/features/ledger/data/ledger_repository.dart';
@@ -16,6 +18,7 @@ void main() {
   late ShoppingRepository shopping;
 
   setUp(() {
+    AppLogger.testMode();
     db = AppDatabase.memory();
     tags = TagRepository(db);
     users = UserRepository(db);
