@@ -268,8 +268,7 @@ void main() {
     });
   });
 
-  group('T2-5 周期只读', () {
-    test('写/改/删历史周期单抛 ArchivedReadOnlyException', () async {
+  group('T2-5 周期只读', () {    test('写/改/删历史周期单抛 ArchivedReadOnlyException', () async {
       final DateTime now = DateTime.now();
       final DateTime lastMonth = DateTime(now.year, now.month - 1, 15);
       final int occurred =
@@ -307,6 +306,161 @@ void main() {
       await expectLater(
         shopping.softDeleteShoppingList(id),
         throwsA(isA<ArchivedReadOnlyException>()),
+      );
+    });
+  });
+
+  group('P8 单件增删改', () {
+    test('单加一件后整单 3 件，分摊独立', () async {
+      final ShoppingDetail created = await shopping.createShoppingList(
+        ledgerId: ledger.id,
+        title: '火锅',
+        items: <NewExpenseItem>[
+          (
+            name: '锅底',
+            quantity: 1,
+            unitPrice: 8000,
+            finalAmount: 8000,
+            payerId: self.id,
+            participantIds: <String>[self.id, ming.id],
+            shares: null,
+            note: null,
+            tagIds: const <String>[],
+          ),
+          (
+            name: '配菜',
+            quantity: 1,
+            unitPrice: 4000,
+            finalAmount: 4000,
+            payerId: ming.id,
+            participantIds: <String>[ming.id],
+            shares: null,
+            note: null,
+            tagIds: const <String>[],
+          ),
+        ],
+      );
+      final ShoppingDetail added = await shopping.addItemToShopping(
+        shoppingId: created.header.id,
+        item: (
+          name: '饮料',
+          quantity: 1,
+          unitPrice: 1200,
+          finalAmount: 1200,
+          payerId: hong.id,
+          participantIds: <String>[self.id, ming.id, hong.id],
+          shares: null,
+          note: null,
+          tagIds: const <String>[],
+        ),
+      );
+      expect(added.items, hasLength(3));
+      final ExpenseDetail drink = added.items.firstWhere(
+        (ExpenseDetail e) => e.item.name == '饮料',
+      );
+      expect(drink.item.payerId, hong.id);
+      expect(
+        drink.participants.map((ItemParticipant e) => e.shareAmount).toSet(),
+        <int>{400},
+      );
+    });
+
+    test('单改一件重算分摊，不影响同单其他商品', () async {
+      final ShoppingDetail created = await shopping.createShoppingList(
+        ledgerId: ledger.id,
+        title: '超市',
+        items: <NewExpenseItem>[
+          (
+            name: '牛奶',
+            quantity: 1,
+            unitPrice: 3000,
+            finalAmount: 3000,
+            payerId: self.id,
+            participantIds: <String>[self.id, ming.id],
+            shares: null,
+            note: null,
+            tagIds: const <String>[],
+          ),
+          (
+            name: '面包',
+            quantity: 1,
+            unitPrice: 800,
+            finalAmount: 800,
+            payerId: self.id,
+            participantIds: <String>[self.id],
+            shares: null,
+            note: null,
+            tagIds: const <String>[],
+          ),
+        ],
+      );
+      final String milkId = created.items
+          .firstWhere((ExpenseDetail e) => e.item.name == '牛奶')
+          .item
+          .id;
+      final ShoppingDetail updated = await shopping.updateExpenseItem(
+        itemId: milkId,
+        finalAmount: 3002,
+        participantIds: <String>[self.id, ming.id, hong.id],
+      );
+      final ExpenseDetail milk = updated.items.firstWhere(
+        (ExpenseDetail e) => e.item.name == '牛奶',
+      );
+      // 3002 / 3 = 1000*3 余 2，给垫付人 self。
+      expect(
+        milk.participants
+                .firstWhere(
+                  (ItemParticipant e) => e.userId == self.id,
+                )
+                .shareAmount,
+        1002,
+      );
+      final ExpenseDetail bread = updated.items.firstWhere(
+        (ExpenseDetail e) => e.item.name == '面包',
+      );
+      expect(bread.item.finalAmount, 800);
+      expect(bread.participants.single.shareAmount, 800);
+    });
+
+    test('单删一件保留余下，删最后一件拒掉', () async {
+      final ShoppingDetail created = await shopping.createShoppingList(
+        ledgerId: ledger.id,
+        title: '待删件',
+        items: <NewExpenseItem>[
+          (
+            name: 'a',
+            quantity: 1,
+            unitPrice: 100,
+            finalAmount: 100,
+            payerId: self.id,
+            participantIds: <String>[self.id],
+            shares: null,
+            note: null,
+            tagIds: const <String>[],
+          ),
+          (
+            name: 'b',
+            quantity: 1,
+            unitPrice: 200,
+            finalAmount: 200,
+            payerId: self.id,
+            participantIds: <String>[self.id],
+            shares: null,
+            note: null,
+            tagIds: const <String>[],
+          ),
+        ],
+      );
+      final String aId = created.items
+          .firstWhere((ExpenseDetail e) => e.item.name == 'a')
+          .item
+          .id;
+      final ShoppingDetail after = await shopping.removeExpenseItem(aId);
+      expect(after.items, hasLength(1));
+      expect(after.items.single.item.name, 'b');
+      await expectLater(
+        shopping.removeExpenseItem(after.items.single.item.id),
+        throwsA(isA<ValidationException>()),
       );
     });
   });

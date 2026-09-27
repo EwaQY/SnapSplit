@@ -13,7 +13,6 @@ import 'package:snap_split/src/features/profile/data/user_repository.dart';
 import 'package:snap_split/src/features/settlement/data/settlement_repository.dart';
 import 'package:snap_split/src/features/settlement/domain/settlement_calculator.dart';
 import 'package:snap_split/src/features/shopping/data/shopping_repository.dart';
-import 'package:snap_split/src/features/tags/data/tag_repository.dart';
 import 'package:snap_split/src/features/timeline/data/timeline_entries.dart';
 import 'package:snap_split/src/features/timeline/data/timeline_repository.dart';
 import 'package:snap_split/src/features/transfer/data/transfer_repository.dart';
@@ -28,12 +27,11 @@ void main() {
     final UserRepository users = UserRepository(db);
     final LedgerRepository ledgers = LedgerRepository(db);
     final ShoppingRepository shopping = ShoppingRepository(db);
-    final TagRepository tags = TagRepository(db);
     final TransferRepository transfers = TransferRepository(db);
     final SettlementRepository settlement = SettlementRepository(db);
     final TimelineRepository timeline = TimelineRepository(db, shopping);
     final BudgetRepository budgets = BudgetRepository(db);
-    final AiIngestRepository ingest = AiIngestRepository(shopping, tags);
+    final AiIngestRepository ingest = AiIngestRepository(shopping);
 
     // 建我→建账本→加 2 人。
     final User self = await users.ensureSelf();
@@ -117,7 +115,6 @@ void main() {
             'quantity': 1,
             'unit_price': 900.0,
             'amount': 900.0,
-            'tag': '购物',
           },
         ],
         'surcharges': <Map<String, dynamic>>[
@@ -125,11 +122,23 @@ void main() {
         ],
         'discounts': const <Map<String, dynamic>>[],
       });
+      final DraftShopping draft = toDraftShopping(dto);
       await ingest.confirmDraftShopping(
         ledgerId: ledger.id,
-        draft: toDraftShopping(dto),
-        payerId: ming.id,
-        participantIds: <String>[ming.id],
+        draft: draft,
+        items: <ConfirmedItem>[
+          (
+            name: draft.items.single.name,
+            quantity: draft.items.single.quantity,
+            unitPrice: draft.items.single.unitPrice,
+            finalAmount: draft.items.single.finalAmount,
+            payerId: ming.id,
+            participantIds: <String>[ming.id],
+            shares: null,
+            note: null,
+            tagIds: const <String>[],
+          ),
+        ],
       );
     }
 

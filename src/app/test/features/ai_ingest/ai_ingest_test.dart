@@ -28,7 +28,7 @@ void main() {
     ledgers = LedgerRepository(db);
     shopping = ShoppingRepository(db);
     tags = TagRepository(db);
-    ingest = AiIngestRepository(shopping, tags);
+    ingest = AiIngestRepository(shopping);
   });
 
   tearDown(() async {
@@ -45,14 +45,12 @@ void main() {
         'quantity': 2,
         'unit_price': 15.00,
         'amount': 30.00,
-        'tag': '餐饮',
       },
       <String, dynamic>{
         'name': '面包',
         'quantity': 1,
         'unit_price': 24.00,
         'amount': 24.00,
-        'tag': '餐饮',
       },
     ],
     'surcharges': <Map<String, dynamic>>[
@@ -82,7 +80,6 @@ void main() {
       draft.items.fold(0, (int sum, DraftItem e) => sum + e.finalAmount),
       4700,
     );
-    expect(draft.items.first.tagNames, <String>['餐饮']);
   });
 
   test('缺字段与空 items 抛 ValidationException', () {
@@ -106,7 +103,7 @@ void main() {
     );
   });
 
-  test('确认落库：source=ai，标签复用/新建', () async {
+  test('确认落库：source=ai，付款人默认提交人、每件分摊人/标签独立', () async {
     final User self = await users.ensureSelf();
     final User ming = await users.createVirtualMember(nickname: '小明');
     final Ledger ledger = await ledgers.createLedger(
@@ -122,25 +119,58 @@ void main() {
     final ShoppingDetail detail = await ingest.confirmDraftShopping(
       ledgerId: ledger.id,
       draft: draft,
-      payerId: self.id,
-      participantIds: <String>[self.id, ming.id],
+      items: <ConfirmedItem>[
+        (
+          name: draft.items[0].name,
+          quantity: draft.items[0].quantity,
+          unitPrice: draft.items[0].unitPrice,
+          finalAmount: draft.items[0].finalAmount,
+          payerId: self.id,
+          participantIds: <String>[self.id, ming.id],
+          shares: null,
+          note: null,
+          tagIds: <String>[existing.id],
+        ),
+        (
+          name: draft.items[1].name,
+          quantity: draft.items[1].quantity,
+          unitPrice: draft.items[1].unitPrice,
+          finalAmount: draft.items[1].finalAmount,
+          payerId: self.id,
+          participantIds: <String>[ming.id],
+          shares: null,
+          note: null,
+          tagIds: const <String>[],
+        ),
+      ],
     );
     expect(detail.header.source, 'ai');
     expect(detail.header.title, '盒马鲜生');
     expect(detail.items, hasLength(2));
-    // 均摊：2611 → 1306/1305（余 1 给垫付人）；2089 → 1045/1044。
+    // 付款人默认提交人（两件都归 self）；分摊人各设各的：
+    // 牛奶 2611 by self+ming → 1306/1305（余 1 给垫付人）；面包 2089 by ming 独享。
     final ExpenseDetail milk = detail.items.firstWhere(
       (ExpenseDetail e) => e.item.name == '牛奶',
     );
+    expect(milk.item.payerId, self.id);
     expect(
       milk.participants.map((ItemParticipant e) => e.shareAmount).toSet(),
       <int>{1306, 1305},
     );
-    // “餐饮”复用现存 id，未新建。
+    // 标签由用户勾选传入。
     expect(
       milk.tags.map((Tag e) => e.id),
       <String>[existing.id],
     );
+    final ExpenseDetail bread = detail.items.firstWhere(
+      (ExpenseDetail e) => e.item.name == '面包',
+    );
+    expect(bread.item.payerId, self.id);
+    expect(
+      bread.participants.map((ItemParticipant e) => e.shareAmount),
+      <int>[2089],
+    );
+    expect(bread.tags, isEmpty);
     expect(await tags.listAllTags(), hasLength(1));
   });
 }
