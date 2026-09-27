@@ -64,6 +64,19 @@ void main() {
       );
       expect(detail.header.defaultPayerId, self.id);
     });
+
+    test('称重小数数量往返（0.32 公斤）', () async {
+      final ShoppingDetail detail = await shopping.createSingleItem(
+        ledgerId: ledger.id,
+        name: '鲜云耳',
+        quantity: 0.32,
+        unitPrice: 1196,
+        finalAmount: 385,
+        payerId: self.id,
+        participantIds: <String>[self.id],
+      );
+      expect(detail.items.single.item.quantity, closeTo(0.32, 1e-9));
+    });
   });
 
   group('T2-3 多账目建单与成员校验', () {

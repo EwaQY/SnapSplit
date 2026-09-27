@@ -62,7 +62,7 @@ const Map<String, List<ExpectedColumn>> kExpectedColumns = <String, List<Expecte
     ('shopping_list_id', 'TEXT', true, null, 0),
     ('ledger_id', 'TEXT', true, null, 0),
     ('name', 'TEXT', true, null, 0),
-    ('quantity', 'INTEGER', true, '1', 0),
+    ('quantity', 'REAL', true, '1.0', 0),
     ('unit_price', 'INTEGER', true, '0', 0),
     ('final_amount', 'INTEGER', true, null, 0),
     ('payer_id', 'TEXT', true, null, 0),

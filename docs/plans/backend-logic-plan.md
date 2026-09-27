@@ -68,7 +68,6 @@
 * 每模块交付物：`lib/src/...` 逻辑代码（含 drift 产物 `*.g.dart`）+ `test/...` 单测 + 本表状态更新；禁止顺手改表语义、禁止写 UI 页面；改表类后必须重跑 codegen 并验证等价性测试。
 
 ## 5. 闭环验证清单（P5 执行，PR 前置）
-
 * [ ] `flutter analyze` 零警告。
 * [ ] 各模块 test 全绿（均已逐个经用户确认目的 + 内容后 commit）。
 * [ ] 冒烟测试通过（§3 定义）。
@@ -87,4 +86,18 @@
 | 2026-09-26 | P3 | feat(p3)+test(p3) | T3-1~T3-4 全绿（53 tests 含回归）+ analyze 零问题，实现零返工 |
 | 2026-09-26 | P4 | feat(p4)+test(p4) | T4-1~T4-4 全绿（61 tests 含回归）+ analyze 零问题；3 次测试算术错已纠正，实现未动 |
 | 2026-09-26 | P5 | feat(p5)+test(p5) | T5-1~T5-4 全绿（67 tests 含回归）+ analyze 零问题；riverpod_generator与drift不兼容改手写providers |
-| — | — | — | 待施工，本文档待验收 |
+| 2026-09-26 | P6 | feat(p6)+test(p6)+fix(p6) | T6 全绿（78 tests 含回归）+ analyze 零问题；Cline 兼容调用层，重试 1 次，4 张真图冒烟 3 成功 1 拦截 |
+
+## 7. 数量列 INTEGER→REAL 切换（schema-v2）
+
+* 原因：称重商品数量为小数（c921 的 0.32 公斤），INTEGER 装不下；
+  钱继续分 + 整数不动（分摊/结算/预算只认 `final_amount`，零影响）。
+* 冻结红线：`docs/database/*.sql` 一字不动（v1 快照/oracle）；
+  `docs/product.md` 仅改数量描述一行（整数→支持小数）。
+* 范围：表类 `quantity IntColumn→RealColumn` + `schemaVersion 2` +
+  迁移（建新表→导数→删旧→改名，SQLite 无 ALTER COLUMN）；
+  等价性测试 quantity 期望改 REAL；
+  `DraftItem.quantity` int→double；AI 映射去 `toInt()`；
+  c921 校验 `<1` 改 `<=0`；fixtures 加 0.32 用例。
+* 回滚：迁移前老库文件保留（dev 双库重建即可，gitignored 无风险）。
+* 结论（2026-09-26）：T7 全绿（81 tests）+ analyze 零问题；prompt 由 AI 归一化数量（称重小数/件数回填/缺省 1），不加 pieces 字段。

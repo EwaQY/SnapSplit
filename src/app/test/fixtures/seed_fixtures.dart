@@ -171,7 +171,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
             shoppingListId: item.$2,
             ledgerId: item.$3,
             name: item.$4,
-            quantity: Value(item.$5),
+            quantity: Value(item.$5.toDouble()),
             unitPrice: Value(item.$6),
             finalAmount: item.$7,
             payerId: item.$8,

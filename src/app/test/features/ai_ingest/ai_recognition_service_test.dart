@@ -370,5 +370,31 @@ void main() {
         ),
       );
     });
+
+    test('称重小数 0.32 通过（c921 回归）', () async {
+      final AiRecognitionService service = AiRecognitionService(
+        config: config,
+        client: MockClient((http.Request request) async {
+          return okJson(
+            envelopeOf(
+              jsonEncode(<String, dynamic>{
+                'merchant': '门市',
+                'items': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'name': '鲜云耳',
+                    'quantity': 0.32,
+                    'unit_price': 11.96,
+                    'amount': 3.85,
+                  },
+                ],
+              }),
+            ),
+          );
+        }),
+      );
+      addTearDown(service.close);
+      final AiReceiptDto dto = await service.parseImageBytes(image);
+      expect(dto.items.single.quantity, closeTo(0.32, 1e-9));
+    });
   });
 }
