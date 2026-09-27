@@ -242,11 +242,11 @@ AiReceiptDto aiReceiptDtoFromPythonJson(
   final List<AiReceiptItem> parsed = <AiReceiptItem>[];
   for (final dynamic raw in items) {
     final Map<String, dynamic> map = raw as Map<String, dynamic>;
-    final int quantity = toNum(map['quantity'])?.toInt() ?? 1;
-    if (quantity < 1) {
+    final double quantity = (toNum(map['quantity']) ?? 1).toDouble();
+    if (quantity <= 0) {
       throw AiException(
         AiFailureKind.badPayload,
-        'AI 商品数量非法（<1）：${map['name']}',
+        'AI 商品数量非法（<=0）：${map['name']}',
       );
     }
     parsed.add(

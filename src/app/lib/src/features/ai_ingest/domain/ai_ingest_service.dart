@@ -13,7 +13,9 @@ class DraftItem {
   });
 
   final String name;
-  final int quantity;
+
+  /// 计费数量（按件为整数值，称重为小数，如 0.32）。
+  final double quantity;
   final int unitPrice;
   final int finalAmount;
   final List<String> tagNames;
@@ -56,7 +58,7 @@ DraftShopping toDraftShopping(AiReceiptDto dto) {
       for (int i = 0; i < dto.items.length; i++)
         DraftItem(
           name: dto.items[i].name,
-          quantity: dto.items[i].quantity.toInt(),
+          quantity: dto.items[i].quantity.toDouble(),
           unitPrice: (dto.items[i].unitPrice * 100).round(),
           finalAmount: baseAmounts[i] + deltas[i],
           tagNames: <String>[

@@ -90,7 +90,7 @@ class ExpenseItems extends Table {
   TextColumn get shoppingListId => text().references(ShoppingLists, #id)();
   TextColumn get ledgerId => text().references(Ledgers, #id)();
   TextColumn get name => text()();
-  IntColumn get quantity => integer().withDefault(const Constant(1))();
+  RealColumn get quantity => real().withDefault(const Constant(1.0))();
   IntColumn get unitPrice => integer().withDefault(const Constant(0))();
   IntColumn get finalAmount => integer()();
   TextColumn get payerId => text().references(Users, #id)();

@@ -28,6 +28,9 @@ This amount is usually at the BOTTOM of the receipt, after all discounts.
 1. "amount" MUST be read directly from the receipt's "实付/应付合计/付:" field
 2. Do NOT calculate amount by summing items - read it from the receipt
 3. Each item's fields:
+   - "quantity": Billing quantity. Weighed goods may be decimal (e.g. 0.32 for 0.32kg).
+     If the receipt shows both 数量 (billing quantity) and 件数 (package count), use 数量.
+     If only 件数 is shown, use it as quantity. If neither is shown, use 1.
    - "unit_price": Original price per unit (before any item-level discount)
    - "amount": Subtotal = quantity × unit_price (before discount)
    - "paid_amount": What that item actually costs after its own discounts

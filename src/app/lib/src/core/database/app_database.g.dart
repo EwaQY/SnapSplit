@@ -2133,13 +2133,13 @@ class $ExpenseItemsTable extends ExpenseItems
     'quantity',
   );
   @override
-  late final GeneratedColumn<int> quantity = GeneratedColumn<int>(
+  late final GeneratedColumn<double> quantity = GeneratedColumn<double>(
     'quantity',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.double,
     requiredDuringInsert: false,
-    defaultValue: const Constant(1),
+    defaultValue: const Constant(1.0),
   );
   static const VerificationMeta _unitPriceMeta = const VerificationMeta(
     'unitPrice',
@@ -2364,7 +2364,7 @@ class $ExpenseItemsTable extends ExpenseItems
         data['${effectivePrefix}name'],
       )!,
       quantity: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.double,
         data['${effectivePrefix}quantity'],
       )!,
       unitPrice: attachedDatabase.typeMapping.read(
@@ -2409,7 +2409,7 @@ class ExpenseItem extends DataClass implements Insertable<ExpenseItem> {
   final String shoppingListId;
   final String ledgerId;
   final String name;
-  final int quantity;
+  final double quantity;
   final int unitPrice;
   final int finalAmount;
   final String payerId;
@@ -2438,7 +2438,7 @@ class ExpenseItem extends DataClass implements Insertable<ExpenseItem> {
     map['shopping_list_id'] = Variable<String>(shoppingListId);
     map['ledger_id'] = Variable<String>(ledgerId);
     map['name'] = Variable<String>(name);
-    map['quantity'] = Variable<int>(quantity);
+    map['quantity'] = Variable<double>(quantity);
     map['unit_price'] = Variable<int>(unitPrice);
     map['final_amount'] = Variable<int>(finalAmount);
     map['payer_id'] = Variable<String>(payerId);
@@ -2482,7 +2482,7 @@ class ExpenseItem extends DataClass implements Insertable<ExpenseItem> {
       shoppingListId: serializer.fromJson<String>(json['shoppingListId']),
       ledgerId: serializer.fromJson<String>(json['ledgerId']),
       name: serializer.fromJson<String>(json['name']),
-      quantity: serializer.fromJson<int>(json['quantity']),
+      quantity: serializer.fromJson<double>(json['quantity']),
       unitPrice: serializer.fromJson<int>(json['unitPrice']),
       finalAmount: serializer.fromJson<int>(json['finalAmount']),
       payerId: serializer.fromJson<String>(json['payerId']),
@@ -2500,7 +2500,7 @@ class ExpenseItem extends DataClass implements Insertable<ExpenseItem> {
       'shoppingListId': serializer.toJson<String>(shoppingListId),
       'ledgerId': serializer.toJson<String>(ledgerId),
       'name': serializer.toJson<String>(name),
-      'quantity': serializer.toJson<int>(quantity),
+      'quantity': serializer.toJson<double>(quantity),
       'unitPrice': serializer.toJson<int>(unitPrice),
       'finalAmount': serializer.toJson<int>(finalAmount),
       'payerId': serializer.toJson<String>(payerId),
@@ -2516,7 +2516,7 @@ class ExpenseItem extends DataClass implements Insertable<ExpenseItem> {
     String? shoppingListId,
     String? ledgerId,
     String? name,
-    int? quantity,
+    double? quantity,
     int? unitPrice,
     int? finalAmount,
     String? payerId,
@@ -2616,7 +2616,7 @@ class ExpenseItemsCompanion extends UpdateCompanion<ExpenseItem> {
   final Value<String> shoppingListId;
   final Value<String> ledgerId;
   final Value<String> name;
-  final Value<int> quantity;
+  final Value<double> quantity;
   final Value<int> unitPrice;
   final Value<int> finalAmount;
   final Value<String> payerId;
@@ -2667,7 +2667,7 @@ class ExpenseItemsCompanion extends UpdateCompanion<ExpenseItem> {
     Expression<String>? shoppingListId,
     Expression<String>? ledgerId,
     Expression<String>? name,
-    Expression<int>? quantity,
+    Expression<double>? quantity,
     Expression<int>? unitPrice,
     Expression<int>? finalAmount,
     Expression<String>? payerId,
@@ -2699,7 +2699,7 @@ class ExpenseItemsCompanion extends UpdateCompanion<ExpenseItem> {
     Value<String>? shoppingListId,
     Value<String>? ledgerId,
     Value<String>? name,
-    Value<int>? quantity,
+    Value<double>? quantity,
     Value<int>? unitPrice,
     Value<int>? finalAmount,
     Value<String>? payerId,
@@ -2742,7 +2742,7 @@ class ExpenseItemsCompanion extends UpdateCompanion<ExpenseItem> {
       map['name'] = Variable<String>(name.value);
     }
     if (quantity.present) {
-      map['quantity'] = Variable<int>(quantity.value);
+      map['quantity'] = Variable<double>(quantity.value);
     }
     if (unitPrice.present) {
       map['unit_price'] = Variable<int>(unitPrice.value);
@@ -8005,7 +8005,7 @@ typedef $$ExpenseItemsTableCreateCompanionBuilder =
       required String shoppingListId,
       required String ledgerId,
       required String name,
-      Value<int> quantity,
+      Value<double> quantity,
       Value<int> unitPrice,
       required int finalAmount,
       required String payerId,
@@ -8021,7 +8021,7 @@ typedef $$ExpenseItemsTableUpdateCompanionBuilder =
       Value<String> shoppingListId,
       Value<String> ledgerId,
       Value<String> name,
-      Value<int> quantity,
+      Value<double> quantity,
       Value<int> unitPrice,
       Value<int> finalAmount,
       Value<String> payerId,
@@ -8147,7 +8147,7 @@ class $$ExpenseItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get quantity => $composableBuilder(
+  ColumnFilters<double> get quantity => $composableBuilder(
     column: $table.quantity,
     builder: (column) => ColumnFilters(column),
   );
@@ -8321,7 +8321,7 @@ class $$ExpenseItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get quantity => $composableBuilder(
+  ColumnOrderings<double> get quantity => $composableBuilder(
     column: $table.quantity,
     builder: (column) => ColumnOrderings(column),
   );
@@ -8441,7 +8441,7 @@ class $$ExpenseItemsTableAnnotationComposer
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<int> get quantity =>
+  GeneratedColumn<double> get quantity =>
       $composableBuilder(column: $table.quantity, builder: (column) => column);
 
   GeneratedColumn<int> get unitPrice =>
@@ -8622,7 +8622,7 @@ class $$ExpenseItemsTableTableManager
                 Value<String> shoppingListId = const Value.absent(),
                 Value<String> ledgerId = const Value.absent(),
                 Value<String> name = const Value.absent(),
-                Value<int> quantity = const Value.absent(),
+                Value<double> quantity = const Value.absent(),
                 Value<int> unitPrice = const Value.absent(),
                 Value<int> finalAmount = const Value.absent(),
                 Value<String> payerId = const Value.absent(),
@@ -8652,7 +8652,7 @@ class $$ExpenseItemsTableTableManager
                 required String shoppingListId,
                 required String ledgerId,
                 required String name,
-                Value<int> quantity = const Value.absent(),
+                Value<double> quantity = const Value.absent(),
                 Value<int> unitPrice = const Value.absent(),
                 required int finalAmount,
                 required String payerId,

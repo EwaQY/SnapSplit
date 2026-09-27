@@ -10,7 +10,7 @@ import '../domain/split_calculator.dart';
 /// 新建账目入参：`shares` 为空时按参与人均摊。
 typedef NewExpenseItem = ({
   String name,
-  int quantity,
+  double quantity,
   int unitPrice,
   int finalAmount,
   String payerId,
@@ -45,7 +45,7 @@ class ShoppingRepository {
   Future<ShoppingDetail> createSingleItem({
     required String ledgerId,
     required String name,
-    required int quantity,
+    required double quantity,
     required int unitPrice,
     required int finalAmount,
     required String payerId,
