@@ -64,16 +64,58 @@ class LedgerRepository {
     },
   );
 
-  /// 取账本，不存在抛 [NotFoundException]。
+  /// 取账本（已软删不可见，不存在抛 [NotFoundException]）。
   Future<Ledger> getById(String id) async {
     final Ledger? ledger =
-        await (_db.select(_db.ledgers)
-              ..where((Ledgers t) => t.id.equals(id))).getSingleOrNull();
+        await (_db.select(_db.ledgers)..where(
+              (Ledgers t) => t.id.equals(id) & t.deletedAt.isNull(),
+            )).getSingleOrNull();
     if (ledger == null) {
       throw NotFoundException('账本不存在：$id');
     }
     return ledger;
   }
+
+  /// 软删除账本：仅当月新建的空账本可删。
+  ///
+  /// - 账本本身不归档；历史账单只读由各 Repository 按发生月控制；
+  /// - 非当月创建、有未删购物单或转账的账本拒绝删除；
+  /// - 删后列表与详情均不可查（同一事务软删成员关系）。
+  Future<void> softDeleteLedger(String id) => AppLogger.audit(
+    action: 'ledger.softDeleteLedger',
+    entity: 'ledger',
+    id: id,
+    run: () async {
+      final Ledger ledger = await getById(id);
+      if (isArchivedPeriod(ledger.createdAt)) {
+        throw ValidationException('仅当月新建的空账本可删除');
+      }
+      final int shoppingCount =
+          await (_db.select(_db.shoppingLists)..where(
+                (t) => t.ledgerId.equals(id) & t.deletedAt.isNull(),
+              )).get().then((rows) => rows.length);
+      final int transferCount =
+          await (_db.select(_db.transfers)..where(
+                (t) => t.ledgerId.equals(id) & t.deletedAt.isNull(),
+              )).get().then((rows) => rows.length);
+      if (shoppingCount + transferCount > 0) {
+        throw ValidationException('账本内有账单，不可删除');
+      }
+      final int now = nowUnixSeconds();
+      await _db.transaction(() async {
+        await (_db.update(_db.ledgers)..where(
+              (t) => t.id.equals(id),
+            )).write(
+          LedgersCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+        );
+        await (_db.update(_db.ledgerMembers)..where(
+              (t) => t.ledgerId.equals(id) & t.deletedAt.isNull(),
+            )).write(
+          LedgerMembersCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+        );
+      });
+    },
+  );
 
   /// 账本列表（创建时间倒序，同秒按插入序兜底；最近访问优先待 `last_visited` 列支持）。
   Future<List<Ledger>> listLedgers() =>

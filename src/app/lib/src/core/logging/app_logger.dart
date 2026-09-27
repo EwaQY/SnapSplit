@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:logger/logger.dart';
+import 'package:sqlite3/sqlite3.dart' show SqliteException;
+
+import '../errors/app_exception.dart';
 
 /// 应用日志：操作审计的唯一出口（文件落盘，不走网络）。
 ///
@@ -110,6 +113,10 @@ class AppLogger {
   }
 
   /// 审计写操作：计时 + 成功/失败日志，异常原样抛出。
+  ///
+  /// 唯一例外：原生 [SqliteException]（非业务校验，如外键/IO 失败）统一
+  /// 包为 [DbException]（友好提示），原始错误保留在日志行中。
+  /// [AppException]（含校验/不存在/归档只读/AI 失败）一律原样透出。
   static Future<T> audit<T>({
     String actor = 'me',
     required String action,
@@ -134,6 +141,12 @@ class AppLogger {
         error: e,
         stackTrace: s,
       );
+      if (e is AppException) {
+        rethrow;
+      }
+      if (e is SqliteException) {
+        throw DbException('数据库异常，请重试（$action）');
+      }
       rethrow;
     }
   }

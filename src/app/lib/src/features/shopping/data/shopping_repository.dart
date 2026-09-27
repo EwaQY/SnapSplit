@@ -91,7 +91,11 @@ class ShoppingRepository {
       }
     final int occurred = occurredAt ?? nowUnixSeconds();
     _requireCurrentPeriod(occurred);
-    for (final NewExpenseItem item in items) {
+    // 防直调去重：参与人/tagIds 统一去重后再校验落库。
+    final List<NewExpenseItem> deduped = <NewExpenseItem>[
+      for (final NewExpenseItem item in items) _dedupItem(item),
+    ];
+    for (final NewExpenseItem item in deduped) {
       if (item.participantIds.isEmpty) {
         throw ValidationException('账目参与人不能为空：${item.name}');
       }
@@ -99,10 +103,11 @@ class ShoppingRepository {
         item.payerId,
         ...item.participantIds,
       });
+      await _requireActiveTags(item.tagIds);
     }
     final int now = nowUnixSeconds();
     final String shoppingId = newId();
-    final String firstPayer = items.first.payerId;
+    final String firstPayer = deduped.first.payerId;
     await _db.transaction(() async {
       await _db
           .into(_db.shoppingLists)
@@ -115,7 +120,7 @@ class ShoppingRepository {
               occurredAt: occurred,
               defaultPayerId: Value(firstPayer),
               defaultParticipantIds: Value(
-                _snapshotIds(items.expand((NewExpenseItem e) => e.participantIds)),
+                _snapshotIds(deduped.expand((NewExpenseItem e) => e.participantIds)),
               ),
               note: Value(note),
               source: Value(source),
@@ -123,7 +128,7 @@ class ShoppingRepository {
               updatedAt: now,
             ),
           );
-      for (final NewExpenseItem item in items) {
+      for (final NewExpenseItem item in deduped) {
         await _insertItem(
           shoppingId: shoppingId,
           ledgerId: ledgerId,
@@ -154,10 +159,13 @@ class ShoppingRepository {
     final int occurred = occurredAt ?? current.header.occurredAt;
     _requireCurrentPeriod(occurred);
     final int now = nowUnixSeconds();
-    final List<NewExpenseItem> next = items ?? _toNewItems(current.items);
-    if (next.isEmpty) {
+    final List<NewExpenseItem> raw = items ?? _toNewItems(current.items);
+    if (raw.isEmpty) {
       throw ValidationException('购物单至少包含一个账目');
     }
+    final List<NewExpenseItem> next = <NewExpenseItem>[
+      for (final NewExpenseItem item in raw) _dedupItem(item),
+    ];
     for (final NewExpenseItem item in next) {
       if (item.participantIds.isEmpty) {
         throw ValidationException('账目参与人不能为空：${item.name}');
@@ -166,6 +174,7 @@ class ShoppingRepository {
         item.payerId,
         ...item.participantIds,
       });
+      await _requireActiveTags(item.tagIds);
     }
     await _db.transaction(() async {
       await (_db.update(_db.shoppingLists)..where(
@@ -226,19 +235,21 @@ class ShoppingRepository {
     run: () async {
       final ShoppingDetail current = await getDetail(shoppingId);
       _requireCurrentPeriod(current.header.occurredAt);
-      if (item.participantIds.isEmpty) {
-        throw ValidationException('账目参与人不能为空：${item.name}');
+      final NewExpenseItem deduped = _dedupItem(item);
+      if (deduped.participantIds.isEmpty) {
+        throw ValidationException('账目参与人不能为空：${deduped.name}');
       }
       await _requireMembers(current.header.ledgerId, <String>{
-        item.payerId,
-        ...item.participantIds,
+        deduped.payerId,
+        ...deduped.participantIds,
       });
+      await _requireActiveTags(deduped.tagIds);
       final int now = nowUnixSeconds();
       await _db.transaction(() async {
         await _insertItem(
           shoppingId: shoppingId,
           ledgerId: current.header.ledgerId,
-          item: item,
+          item: deduped,
           now: now,
         );
         await (_db.update(_db.shoppingLists)..where(
@@ -276,7 +287,8 @@ class ShoppingRepository {
       _requireCurrentPeriod(parent.header.occurredAt);
       final String nextPayer = payerId ?? current.payerId;
       final int nextFinal = finalAmount ?? current.finalAmount;
-      final List<String>? nextParticipants = participantIds;
+      final List<String>? nextParticipants = participantIds?.toSet().toList();
+      final List<String>? nextTagIds = tagIds?.toSet().toList();
       final bool splitTouched =
           nextParticipants != null || shares != null || payerId != null ||
           finalAmount != null;
@@ -288,6 +300,9 @@ class ShoppingRepository {
         nextPayer,
         ...resolvedParticipants,
       });
+      if (nextTagIds != null) {
+        await _requireActiveTags(nextTagIds);
+      }
       final int now = nowUnixSeconds();
       await _db.transaction(() async {
         await (_db.update(_db.expenseItems)..where(
@@ -346,7 +361,7 @@ class ShoppingRepository {
           await (_db.delete(_db.itemTags)..where(
                 (ItemTags t) => t.expenseItemId.equals(itemId),
               )).go();
-          for (final String tagId in tagIds.toSet()) {
+          for (final String tagId in nextTagIds!.toSet()) {
             await _db
                 .into(_db.itemTags)
                 .insert(
@@ -474,6 +489,7 @@ class ShoppingRepository {
     if (item.participantIds.isEmpty) {
       throw ValidationException('账目参与人不能为空：${item.name}');
     }
+    await _requireActiveTags(item.tagIds);
     await _requireMembers(ledgerId, <String>{
       item.payerId,
       ...item.participantIds,
@@ -559,6 +575,34 @@ class ShoppingRepository {
   }
 
   /// 校验用户集合均为账本活跃成员。
+  /// 入参去重（防直调重复选择，静默合并）。
+  NewExpenseItem _dedupItem(NewExpenseItem item) => (
+    name: item.name,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    finalAmount: item.finalAmount,
+    payerId: item.payerId,
+    participantIds: item.participantIds.toSet().toList(),
+    shares: item.shares,
+    note: item.note,
+    tagIds: item.tagIds.toSet().toList(),
+  );
+
+  /// 新账目仅可用活跃标签（已归档/已删/不存在一律拒写，历史引用展示不动）。
+  Future<void> _requireActiveTags(List<String> tagIds) async {
+    for (final String tagId in tagIds.toSet()) {
+      final Tag? tag =
+          await (_db.select(_db.tags)..where(
+                (Tags t) =>
+                    t.id.equals(tagId) &
+                    t.archivedAt.isNull() &
+                    t.deletedAt.isNull(),
+              )).getSingleOrNull();
+      if (tag == null) {
+        throw ValidationException('标签已归档或不存在，请重新选择');
+      }
+    }
+  }
   Future<List<String>> _participantIdsOf(String itemId) async {
     final List<ItemParticipant> rows =
         await (_db.select(_db.itemParticipants)..where(
