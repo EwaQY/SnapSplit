@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:snap_split/src/core/logging/app_logger.dart';
@@ -422,8 +423,7 @@ void main() {
       expect(bread.participants.single.shareAmount, 800);
     });
 
-    test('单删一件保留余下，删最后一件拒掉', () async {
-      final ShoppingDetail created = await shopping.createShoppingList(
+    test('单删一件保留余下，删最后一件拒掉', () async {      final ShoppingDetail created = await shopping.createShoppingList(
         ledgerId: ledger.id,
         title: '待删件',
         items: <NewExpenseItem>[
@@ -461,6 +461,86 @@ void main() {
       await expectLater(
         shopping.removeExpenseItem(after.items.single.item.id),
         throwsA(isA<ValidationException>()),
+      );
+    });
+  });
+
+  group('P9 归档拒写与去重', () {
+    test('归档标签新建/编辑均拒写，活跃标签放行', () async {
+      final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await db
+          .into(db.tags)
+          .insert(
+            TagsCompanion.insert(
+              id: 'tag-old',
+              name: '旧标签',
+              createdAt: 1,
+              updatedAt: 1,
+            ),
+          );
+      await db
+          .into(db.tags)
+          .insert(
+            TagsCompanion.insert(
+              id: 'tag-archived',
+              name: '已归档',
+              createdAt: 1,
+              updatedAt: 1,
+            ),
+          );
+      await (db.update(db.tags)..where(
+            (t) => t.id.equals('tag-archived'),
+          )).write(TagsCompanion(archivedAt: Value(now)));
+      await expectLater(
+        shopping.createSingleItem(
+          ledgerId: ledger.id,
+          name: '坏账',
+          quantity: 1,
+          unitPrice: 100,
+          finalAmount: 100,
+          payerId: self.id,
+          participantIds: <String>[self.id],
+          tagIds: <String>['tag-archived'],
+        ),
+        throwsA(isA<ValidationException>()),
+      );
+      final ShoppingDetail ok = await shopping.createSingleItem(
+        ledgerId: ledger.id,
+        name: '好账',
+        quantity: 1,
+        unitPrice: 100,
+        finalAmount: 100,
+        payerId: self.id,
+        participantIds: <String>[self.id],
+        tagIds: <String>['tag-old'],
+      );
+      await expectLater(
+        shopping.updateExpenseItem(
+          itemId: ok.items.single.item.id,
+          tagIds: <String>['tag-archived'],
+        ),
+        throwsA(isA<ValidationException>()),
+      );
+    });
+
+    test('重复参与人/标签静默去重', () async {
+      final ShoppingDetail detail = await shopping.createSingleItem(
+        ledgerId: ledger.id,
+        name: '去重账',
+        quantity: 1,
+        unitPrice: 3000,
+        finalAmount: 3000,
+        payerId: self.id,
+        participantIds: <String>[self.id, self.id, ming.id, ming.id],
+      );
+      expect(
+        detail.items.single.participants.map((e) => e.userId).toSet(),
+        <String>{self.id, ming.id},
+      );
+      expect(
+        detail.items.single.participants
+            .fold(0, (sum, e) => sum + e.shareAmount),
+        3000,
       );
     });
   });

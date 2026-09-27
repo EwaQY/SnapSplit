@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:snap_split/src/core/logging/app_logger.dart';
 
 import 'package:snap_split/src/core/database/app_database.dart';
+import 'package:snap_split/src/core/errors/app_exception.dart';
 import 'package:snap_split/src/core/utils/app_time.dart';
 import 'package:snap_split/src/features/ai_ingest/data/ai_ingest_repository.dart';
 import 'package:snap_split/src/features/ai_ingest/domain/ai_ingest_service.dart';
@@ -198,6 +199,22 @@ void main() {
     );
     expect(progress.spent, 13000);
     expect(progress.overBudget, isFalse);
+
+    // 上月只读：历史周期写拒掉。
+    final DateTime lastMonth = DateTime(now.year, now.month - 1, 15);
+    await expectLater(
+      shopping.createSingleItem(
+        ledgerId: ledger.id,
+        name: '上月账',
+        quantity: 1,
+        unitPrice: 100,
+        finalAmount: 100,
+        payerId: self.id,
+        participantIds: <String>[self.id],
+        occurredAt: lastMonth.millisecondsSinceEpoch ~/ 1000,
+      ),
+      throwsA(isA<ArchivedReadOnlyException>()),
+    );
 
     // 删多账目单→级联；时间线减 1。
     final List<TimelineEntry> before = await timeline.listTimeline(ledger.id);

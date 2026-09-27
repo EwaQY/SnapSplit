@@ -116,8 +116,7 @@ void main() {
       );
     });
 
-    test('删不存在/不在账本的成员抛 NotFoundException', () async {
-      final User self = await users.ensureSelf();
+    test('删不存在/不在账本的成员抛 NotFoundException', () async {      final User self = await users.ensureSelf();
       final Ledger ledger = await ledgers.createLedger(
         name: '账本',
         ownerUserId: self.id,
@@ -133,6 +132,83 @@ void main() {
           nickname: 'x',
         ),
         throwsA(isA<NotFoundException>()),
+      );
+    });
+  });
+
+  group('P9 账本删除收紧', () {
+    test('当月空账本可删，删后列表与详情均不可查', () async {
+      final User self = await users.ensureSelf();
+      final Ledger ledger = await ledgers.createLedger(
+        name: '临时',
+        ownerUserId: self.id,
+      );
+      await ledgers.softDeleteLedger(ledger.id);
+      expect(
+        (await ledgers.listLedgers()).map((Ledger e) => e.id),
+        isNot(contains(ledger.id)),
+      );
+      await expectLater(
+        ledgers.getById(ledger.id),
+        throwsA(isA<NotFoundException>()),
+      );
+    });
+
+    test('有账单的账本不可删', () async {
+      final User self = await users.ensureSelf();
+      final Ledger ledger = await ledgers.createLedger(
+        name: '有账',
+        ownerUserId: self.id,
+      );
+      await db
+          .into(db.shoppingLists)
+          .insert(
+            ShoppingListsCompanion.insert(
+              id: 'sl-1',
+              ledgerId: ledger.id,
+              occurredAt: 1,
+              createdAt: 1,
+              updatedAt: 1,
+            ),
+          );
+      await expectLater(
+        ledgers.softDeleteLedger(ledger.id),
+        throwsA(isA<ValidationException>()),
+      );
+    });
+
+    test('非当月创建的账本不可删', () async {
+      final User self = await users.ensureSelf();
+      final DateTime now = DateTime.now();
+      final DateTime lastMonth = DateTime(now.year, now.month - 1, 10);
+      final int occurred = lastMonth.millisecondsSinceEpoch ~/ 1000;
+      await db
+          .into(db.ledgers)
+          .insert(
+            LedgersCompanion.insert(
+              id: 'l-old',
+              name: '旧账本',
+              ownerUserId: self.id,
+              createdAt: occurred,
+              updatedAt: occurred,
+            ),
+          );
+      await expectLater(
+        ledgers.softDeleteLedger('l-old'),
+        throwsA(isA<ValidationException>()),
+      );
+    });
+
+    test('非法 owner 建账本抛友好 DbException', () async {
+      await expectLater(
+        ledgers.createLedger(name: '坏账本', ownerUserId: 'ghost'),
+        throwsA(
+          isA<DbException>().having(
+            (DbException e) => e.message,
+            'message',
+            contains('数据库异常'),
+          ),
+        ),
       );
     });
   });

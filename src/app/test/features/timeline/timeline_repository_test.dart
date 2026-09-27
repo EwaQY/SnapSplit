@@ -46,6 +46,9 @@ void main() {
 
   test('三态条目与倒序', () async {
     // 单账目（降维）→ 多账目（展开）→ 转账。
+    // 固定同一秒，消除跨秒时序抖动，同秒次序由 kindRank 保证。
+    final int occurred =
+        DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await shopping.createSingleItem(
       ledgerId: ledger.id,
       name: '早餐',
@@ -54,10 +57,12 @@ void main() {
       finalAmount: 1000,
       payerId: self.id,
       participantIds: <String>[self.id],
+      occurredAt: occurred,
     );
     await shopping.createShoppingList(
       ledgerId: ledger.id,
       title: '采购',
+      occurredAt: occurred,
       items: <NewExpenseItem>[
         (
           name: 'a',
@@ -88,6 +93,7 @@ void main() {
       fromUserId: ming.id,
       toUserId: self.id,
       amountCents: 500,
+      occurredAt: occurred,
     );
 
     final List<TimelineEntry> entries = await timeline.listTimeline(ledger.id);

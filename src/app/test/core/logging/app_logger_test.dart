@@ -148,5 +148,25 @@ void main() {
       }
       AppLogger.testMode(memory: <String>[]);
     });
+
+    test('cleanupLogFile 超 5MB 截尾且不断行', () async {
+      final Directory tmp = await Directory.systemTemp.createTemp('applog');
+      addTearDown(() => tmp.delete(recursive: true));
+      final File file = File('${tmp.path}/app.log');
+      final String stamp = '[${DateTime.now().toIso8601String()}] ';
+      final String line = '$stamp${'x' * 99}\n';
+      final int lines = AppLogger.maxBytes ~/ line.length + 100;
+      final StringBuffer sb = StringBuffer();
+      for (int i = 0; i < lines; i++) {
+        sb.write(line);
+      }
+      await file.writeAsString(sb.toString());
+      expect(await file.length(), greaterThan(AppLogger.maxBytes));
+      await AppLogger.cleanupLogFile(file);
+      final int size = await file.length();
+      expect(size, lessThanOrEqualTo(AppLogger.maxBytes));
+      final String first = (await file.readAsLines()).first;
+      expect(first.startsWith('['), isTrue);
+    });
   });
 }
