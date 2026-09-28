@@ -79,8 +79,9 @@ class AppDatabase extends _$AppDatabase {
   /// 打开内存库（单测入口，每次全新）。
   AppDatabase.memory() : super(NativeDatabase.memory());
 
+  /// 未发布：版本号定死 1，不做升级迁移；改表直接改结构重建库。
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -90,66 +91,8 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(statement);
       }
     },
-    onUpgrade: (Migrator m, int from, int to) async {
-      if (from == 1) {
-        await _migrateV1ToV2();
-      }
-    },
     beforeOpen: (OpeningDetails details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
-
-  /// v1→v2：`expense_item.quantity` INTEGER→REAL。
-  ///
-  /// SQLite 不支持 ALTER COLUMN，整表重建（DDL 与 drift 生成逐字一致，
-  /// 迁移后库与全新库无差别）。整数存量自动转为 REAL（1 → 1.0）。
-  Future<void> _migrateV1ToV2() async {
-    const List<String> columns = <String>[
-      '"id"',
-      '"shopping_list_id"',
-      '"ledger_id"',
-      '"name"',
-      '"quantity"',
-      '"unit_price"',
-      '"final_amount"',
-      '"payer_id"',
-      '"note"',
-      '"created_at"',
-      '"updated_at"',
-      '"deleted_at"',
-    ];
-    final String columnList = columns.join(', ');
-    await customStatement('PRAGMA foreign_keys = OFF');
-    await customStatement(
-      'CREATE TABLE "expense_item_new" '
-      '("id" TEXT NOT NULL, '
-      '"shopping_list_id" TEXT NOT NULL REFERENCES shopping_list (id), '
-      '"ledger_id" TEXT NOT NULL REFERENCES ledger (id), '
-      '"name" TEXT NOT NULL, '
-      '"quantity" REAL NOT NULL DEFAULT 1.0, '
-      '"unit_price" INTEGER NOT NULL DEFAULT 0, '
-      '"final_amount" INTEGER NOT NULL, '
-      '"payer_id" TEXT NOT NULL REFERENCES user (id), '
-      '"note" TEXT NULL, '
-      '"created_at" INTEGER NOT NULL, '
-      '"updated_at" INTEGER NOT NULL, '
-      '"deleted_at" INTEGER NULL, '
-      'PRIMARY KEY ("id"))',
-    );
-    await customStatement(
-      'INSERT INTO "expense_item_new" ($columnList) '
-      'SELECT $columnList FROM "expense_item"',
-    );
-    await customStatement('DROP TABLE "expense_item"');
-    await customStatement(
-      'ALTER TABLE "expense_item_new" RENAME TO "expense_item"',
-    );
-    for (final String statement in kIndexStatements) {
-      if (statement.contains('"expense_item"')) {
-        await customStatement(statement);
-      }
-    }
-    await customStatement('PRAGMA foreign_keys = ON');
-  }
 }

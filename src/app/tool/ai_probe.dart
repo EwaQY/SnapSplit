@@ -9,7 +9,7 @@ import 'package:snap_split/src/features/ai_ingest/domain/ai_receipt_dto.dart';
 
 /// AI 识别人工冒烟探针（不进 flutter test，CI 不跑）。
 ///
-/// 用法（src/app 下，需先填好 .env 的 api_key）：
+/// 用法（src/app 下，真站联调只在本机内存临时填 key，不落盘）：
 ///   dart run tool/ai_probe.dart <图片路径> [--index N] [--out <目录>]
 ///
 /// 控制台输出草稿摘要；加 --out 则另存 UTF-8 结果文件
@@ -35,11 +35,11 @@ Future<void> main(List<String> args) async {
     _fail(2, '图片不存在：$imagePath');
   }
 
-  // 探针为纯 Dart CLI（flutter_dotenv 依赖 dart:ui，此处手写解析；
-  // App 正式路径仍走 flutter_dotenv）。
-  final AiConfig config = AiConfig.fromMap(_readEnvFile('.env'));
+  // 探针默认占位；打真站时调 loadAiConfig 传参（key/模型/头），不读文件不落盘。
+  // 默认站是 Cline 私有接口，随默认带上 x-client-type；切标准站传空即可。
+  final AiConfig config = loadAiConfig(extraHeaders: kClineClientHeaders);
   if (!config.isConfigured) {
-    _fail(2, '未配置 api_key：请复制 .env.example 为 .env 并填写');
+    _fail(2, '未配置 api_key：调 loadAiConfig 传参覆盖后重跑（不落盘不提交）');
   }
 
   final AiRecognitionService service = AiRecognitionService(config: config);
@@ -170,31 +170,4 @@ Map<String, dynamic>? _tryParseJson(String rawContent) {
   } catch (_) {
     return null;
   }
-}
-
-/// 手写 .env 解析（平键 KEY=VALUE，跳空行/#，去首尾空格去引号）。
-Map<String, String> _readEnvFile(String path) {
-  final File file = File(path);
-  if (!file.existsSync()) {
-    return <String, String>{};
-  }
-  final Map<String, String> env = <String, String>{};
-  for (final String line in file.readAsLinesSync()) {
-    final String trimmed = line.trim();
-    if (trimmed.isEmpty || trimmed.startsWith('#')) {
-      continue;
-    }
-    final int sep = trimmed.indexOf('=');
-    if (sep <= 0) {
-      continue;
-    }
-    String value = trimmed.substring(sep + 1).trim();
-    if (value.length >= 2 &&
-        ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'")))) {
-      value = value.substring(1, value.length - 1);
-    }
-    env[trimmed.substring(0, sep).trim()] = value;
-  }
-  return env;
 }

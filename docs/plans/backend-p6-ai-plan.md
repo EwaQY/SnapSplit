@@ -68,3 +68,23 @@
 | 2026-09-26 | 实现+自编译 | dotenv 在 CLI 下不可用已验证，探针改手写解析（App 照走 dotenv）；3 个 import/插值编译错已修 |
 | 2026-09-26 | T6 全绿（74 tests 含回归）+ analyze 零问题 | 修测试 Latin1 构造问题 1 个，实现零改动；用户已确认 |
 | 2026-09-26 | fix(p6)×2：重试/数量校验/探针结果格式 | T6 补到 82 全绿；4 张真图冒烟（3 成功 1 拦截后小数链路打通）；结果文件放 data/probe_results（不提交） |
+| 2026-09-28 | PR#3 review 11 条闭环（§8） | 9 改 + 2 纯回复；analyze 零问题 + 103 全绿 |
+
+## 8. PR#3 review 改动记录（2026-09-28）
+
+> 历史 §1–§7 不动。本节为 PR#3（XcantloadX，CHANGES_REQUESTED）11 条内联评论的改动口径；
+> 另声明：`backend-logic-plan.md §7` 的 `schemaVersion 2 + 迁移` 已作废——未发布，版本号定死 1，
+> 改表直接改结构重建库，无迁移（见下表 3/4）。
+
+| # | 评论 | 结论 | 文件 | 验证 |
+|---|---|---|---|---|
+| 1 | `.gitignore:8` 测试日志为何共享忽略 | 改：删共享规则，改各机 `.git/info/exclude` | `.gitignore` | `check-ignore` 命中 exclude |
+| 2 | `.env.example:1` 模型为何走 .env | 改：删示例/`flutter_dotenv`/`_readEnvFile`/`fromMap`；顶部常量 + `loadAiConfig` 传参，`apiKey` 占位不读盘 | `ai_config.dart`、`ai_probe.dart`、`pubspec.yaml`、`.env.example`（删） | `src/app` 零命中 dotenv；ai 单测绿 |
+| 3 | `app_database:83` 未发版为何 schema=2 | 改：定死 `schemaVersion => 1`；`schema.sql quantity` 对齐 REAL | `app_database.dart`、`docs/database/schema.sql` | 等价测试 5/5 |
+| 4 | `app_database:95` 哪来迁移 | 改：删 `onUpgrade/_migrateV1ToV2` + `migration_test.dart` | 同上 + 测试删除 | 全量 103 绿 |
+| 5 | `app_logger:1` 用现成库？ | 纯回复：已基于 `logger`，薄封装保留 | — | `app_logger_test` 绿 |
+| 6 | `ai_recognition:234` Python 结构？ | 改注释：Cline 信封，命名沿用旧原型 | `ai_recognition_service.dart` | analyze 零问题 |
+| 7 | `ai_recognition:144` cline 写死 | 改双轨：Cline 手写 `extraHeaders` 透传；标准站 `openai_dart` | `ai_config.dart`、`ai_recognition_service.dart`、`standard_recognition_service.dart`（新）、`pubspec` | 双轨单测（有头/无头）绿 |
+| 8/9 | 提示词简陋/两套提示词 | 改：收敛 `ai_prompt.dart`（`kReceiptSystemPrompt` + 新增 `kReceiptUserPrompt` + `total_surcharge` 定义），两轨同引 | `ai_prompt.dart`、两服务 | ai_ingest 20/20 |
+| 10 | `ai_receipt_dto:73` 折扣/附加必要？ | 改：总数保留（折扣负数不动；`total_surcharge` 非负新增映射摊入 `finalAmount`）；解析/分摊摘要日志（无 PII/原文） | `ai_recognition_service.dart`、`ai_ingest_service.dart` | 新增 surcharge 单测绿 |
+| 11 | `schema_equivalence_test:1` 价值？ | 纯回复：P0 漂移门禁，保留 | — | 5/5 通过 |

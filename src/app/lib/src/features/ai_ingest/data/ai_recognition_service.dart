@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import 'ai_config.dart';
 import '../domain/ai_prompt.dart';
 import '../domain/ai_receipt_dto.dart';
@@ -67,22 +68,42 @@ class AiRecognitionService {
         '图片超过 10MB 上限',
       );
     }
+    final Stopwatch sw = Stopwatch()..start();
+    int attempts = 0;
     try {
-      return await _parseOnce(
+      attempts++;
+      final result = await _parseOnce(
         bytes,
         mime: mime,
         sourceImageIndex: sourceImageIndex,
       );
+      logAiParseSummary(
+        model: config.modelId,
+        ms: sw.elapsedMilliseconds,
+        retry: attempts - 1,
+        dto: result.dto,
+        rawBytes: result.rawContent.length,
+      );
+      return result;
     } on AiException catch (e) {
       if (!_isTransient(e)) {
         rethrow;
       }
       // 抖动重试 1 次（截断/500/超时多半第二次成功）。
-      return _parseOnce(
+      attempts++;
+      final result = await _parseOnce(
         bytes,
         mime: mime,
         sourceImageIndex: sourceImageIndex,
       );
+      logAiParseSummary(
+        model: config.modelId,
+        ms: sw.elapsedMilliseconds,
+        retry: attempts - 1,
+        dto: result.dto,
+        rawBytes: result.rawContent.length,
+      );
+      return result;
     }
   }
 
@@ -119,7 +140,7 @@ class AiRecognitionService {
           'content': <Map<String, dynamic>>[
             <String, dynamic>{
               'type': 'text',
-              'text': 'Parse this receipt. Find the 实付/应付合计 amount.',
+              'text': kReceiptUserPrompt,
             },
             <String, dynamic>{
               'type': 'image_url',
@@ -141,7 +162,7 @@ class AiRecognitionService {
             headers: <String, String>{
               'Authorization': 'Bearer ${config.apiKey}',
               'Content-Type': 'application/json',
-              'x-client-type': 'cline-cli',
+              ...config.extraHeaders,
             },
             body: jsonEncode(body),
           )
@@ -231,10 +252,11 @@ class AiRecognitionService {
   void close() => _client.close();
 }
 
-/// Python 结构 → Dart DTO 映射（Dart DTO 口径）。
+/// Cline 兼容响应 → Dart DTO 映射（字段命名沿用旧 Python 原型）。
 ///
 /// - `items[].amount`（折扣前小计）→ 基数；`total_discount`（负）→ 折扣数组；
-/// - `surcharges` 置空；`paid_amount` 只存档；字符串数字兼容。
+/// - `total_surcharge`（非负）→ 附加费数组，缺省 0；
+/// - `paid_amount` 只存档；字符串数字兼容。
 AiReceiptDto aiReceiptDtoFromPythonJson(
   Map<String, dynamic> json, {
   int sourceImageIndex = 0,
@@ -254,6 +276,7 @@ AiReceiptDto aiReceiptDtoFromPythonJson(
     throw const AiException(AiFailureKind.badPayload, 'AI 识别结果无商品');
   }
   final num? totalDiscount = toNum(json['total_discount']);
+  final num? totalSurcharge = toNum(json['total_surcharge']);
   final List<AiReceiptItem> parsed = <AiReceiptItem>[];
   for (final dynamic raw in items) {
     final Map<String, dynamic> map = raw as Map<String, dynamic>;
@@ -283,11 +306,36 @@ AiReceiptDto aiReceiptDtoFromPythonJson(
       if (totalDiscount != null && totalDiscount != 0)
         AiAdjustment(name: 'AI订单折扣', amount: totalDiscount),
     ],
+    surcharges: <AiAdjustment>[
+      if (totalSurcharge != null && totalSurcharge != 0)
+        AiAdjustment(name: 'AI附加费', amount: totalSurcharge),
+    ],
   );
 }
 
-String _mimeOf(String path) {
-  final String lower = path.toLowerCase();
+/// 解析摘要日志（总数口径：不记品名/单价/原文；merchant 只记 hash）。
+void logAiParseSummary({
+  required String model,
+  required int ms,
+  required int retry,
+  required AiReceiptDto dto,
+  required int rawBytes,
+}) {
+  final int base = dto.items.fold(
+    0,
+    (int sum, AiReceiptItem e) => sum + (e.amount * 100).round(),
+  );
+  AppLogger.info(
+    'ai.parse ok model=$model ms=${ms}ms retry=$retry '
+    'items=${dto.items.length} base=$base分 '
+    'disc=${dto.discountCents}分 sur=${dto.surchargeCents}分 '
+    'rawBytes=$rawBytes '
+    'merchantHash=${(dto.merchant ?? '-').hashCode.toRadixString(16)} '
+    'date=${dto.date ?? '-'}',
+  );
+}
+
+String _mimeOf(String path) {  final String lower = path.toLowerCase();
   if (lower.endsWith('.png')) {
     return 'image/png';
   }

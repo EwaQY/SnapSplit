@@ -1,11 +1,7 @@
 # SQLite数据库文件
 data/*.db
 
-# 本地环境变量（含 API Key，永不提交；模板见 src/app/.env.example）
-.env
-
-# 测试日志（本地产物，追加保留，5 天清理）
-src/app/test_logs/
+# 本地产物（.env、test_logs）各机自行写入 .git/info/exclude，不进共享忽略
 
 # 系统文件
 .DS_Store

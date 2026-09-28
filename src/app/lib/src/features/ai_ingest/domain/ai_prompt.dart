@@ -19,7 +19,8 @@ This amount is usually at the BOTTOM of the receipt, after all discounts.
 
 ## Optional Fields
 - subtotal: Total before discounts
-- total_discount: Total discount amount (negative)
+- total_discount: Total discount amount (negative, 0 when absent)
+- total_surcharge: Total surcharge amount, non-negative (delivery/packing/tax/service fees, 0 when absent)
 - expense_date: Date (YYYY-MM-DD)
 - payment_method: Payment method
 - discount_model: One of "order_level", "item_level", or "mixed"
@@ -45,7 +46,8 @@ This amount is usually at the BOTTOM of the receipt, after all discounts.
     "merchant": "shop name",
     "amount": "FINAL PAID AMOUNT FROM RECEIPT",
     "subtotal": "total before discounts",
-    "total_discount": "-discount amount",
+    "total_discount": "-discount amount (negative, 0 when absent)",
+    "total_surcharge": "surcharge amount, non-negative (0 when absent)",
     "discount_model": "order_level|item_level|mixed",
     "items": [
         {
@@ -59,3 +61,11 @@ This amount is usually at the BOTTOM of the receipt, after all discounts.
 }
 
 Return ONLY JSON, no other text.''';
+
+/// AI 小票解析 user prompt（与 system 版同关键词口径，两轨共用）。
+const String kReceiptUserPrompt =
+    'Parse this receipt. Find the 实付/应付合计 amount. '
+    'Read amount directly, do NOT sum items. '
+    'Report total_discount (negative, 0 when absent) and '
+    'total_surcharge (non-negative, 0 when absent). '
+    'Return ONLY JSON.';

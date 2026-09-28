@@ -16,6 +16,7 @@ void main() {
     baseUrl: 'https://example.test/api/v1',
     modelId: 'test-model',
     apiKey: 'test-key',
+    extraHeaders: <String, String>{'x-client-type': 'cline-cli'},
   );
   final Uint8List image = Uint8List.fromList(<int>[1, 2, 3]);
 
@@ -94,6 +95,61 @@ void main() {
         -15.0,
       );
       expect(dto.items.first.paidAmount, 30.0);
+    });
+
+    test('标准站无私有头：extraHeaders 为空则不发 x-client-type', () async {      const AiConfig plain = AiConfig(
+        baseUrl: 'https://example.test/api/v1',
+        modelId: 'test-model',
+        apiKey: 'test-key',
+      );
+      final AiRecognitionService service = AiRecognitionService(
+        config: plain,
+        client: MockClient((http.Request request) async {
+          expect(request.headers.containsKey('x-client-type'), isFalse);
+          return okJson(envelopeOf(orderLevelContent()));
+        }),
+      );
+      addTearDown(service.close);
+      final AiReceiptDto dto = await service.parseImageBytes(image);
+      expect(dto.merchant, '盒马');
+    });
+
+    test('total_surcharge 非负摊入，缺省为 0', () async {
+      AiRecognitionService serviceFor(Object? surcharge) {
+        final Map<String, dynamic> receipt = <String, dynamic>{
+          'merchant': '店',
+          'total_discount': '-15.00',
+          'items': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'name': '水',
+              'quantity': 1,
+              'unit_price': 200,
+              'amount': 200,
+            },
+          ],
+        };
+        if (surcharge != null) {
+          receipt['total_surcharge'] = surcharge;
+        }
+        return AiRecognitionService(
+          config: config,
+          client: MockClient((http.Request request) async {
+            return okJson(envelopeOf(jsonEncode(receipt)));
+          }),
+        );
+      }
+
+      final AiRecognitionService withSur = serviceFor('8.00');
+      addTearDown(withSur.close);
+      final AiReceiptDto dto = await withSur.parseImageBytes(image);
+      expect(dto.surcharges.single.amount, 8.0);
+      expect(dto.surchargeCents + dto.discountCents, -700);
+
+      final AiRecognitionService withoutSur = serviceFor(null);
+      addTearDown(withoutSur.close);
+      final AiReceiptDto dto2 = await withoutSur.parseImageBytes(image);
+      expect(dto2.surcharges, isEmpty);
+      expect(dto2.surchargeCents, 0);
     });
 
     test('item 级折扣单无围栏照常解析', () async {

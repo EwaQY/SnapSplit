@@ -1,4 +1,5 @@
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../shopping/domain/surcharge_allocator.dart';
 import 'ai_receipt_dto.dart';
 
@@ -48,6 +49,12 @@ DraftShopping toDraftShopping(AiReceiptDto dto) {
   final List<int> deltas = allocateAdjustment(
     adjustment: adjustment,
     baseAmounts: baseAmounts,
+  );
+  final int baseTotal = baseAmounts.fold(0, (int a, int b) => a + b);
+  AppLogger.info(
+    'ai.adjust items=${dto.items.length} base=$baseTotal分 '
+    'disc=${dto.discountCents}分 sur=${dto.surchargeCents}分 '
+    'final=${baseTotal + adjustment}分',
   );
   return DraftShopping(
     sourceImageIndex: dto.sourceImageIndex,
