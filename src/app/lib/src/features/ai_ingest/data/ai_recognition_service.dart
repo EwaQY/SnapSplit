@@ -33,27 +33,23 @@ class AiRecognitionService {
   static const Duration timeout = Duration(seconds: 60);
 
   /// 解析图片文件。
-  Future<AiReceiptDto> parseImageFile(
-    File file, {
-    int sourceImageIndex = 0,
-  }) => parseImageBytes(
-    file.readAsBytesSync(),
-    mime: _mimeOf(file.path),
-    sourceImageIndex: sourceImageIndex,
-  );
+  Future<AiReceiptDto> parseImageFile(File file, {int sourceImageIndex = 0}) =>
+      parseImageBytes(
+        file.readAsBytesSync(),
+        mime: _mimeOf(file.path),
+        sourceImageIndex: sourceImageIndex,
+      );
 
-  /// 解析图片字节（抖动重试 1 次：5xx/超时/断网/截断）。
+  /// 解析图片字节。
   Future<AiReceiptDto> parseImageBytes(
     Uint8List bytes, {
     String mime = 'image/jpeg',
     int sourceImageIndex = 0,
-  }) async =>
-      (await parseImageBytesWithRaw(
-        bytes,
-        mime: mime,
-        sourceImageIndex: sourceImageIndex,
-      ))
-          .dto;
+  }) async => (await parseImageBytesWithRaw(
+    bytes,
+    mime: mime,
+    sourceImageIndex: sourceImageIndex,
+  )).dto;
 
   /// 解析图片字节，同时返回 AI 原文（探针存档用）。
   Future<({AiReceiptDto dto, String rawContent})> parseImageBytesWithRaw(
@@ -63,66 +59,21 @@ class AiRecognitionService {
   }) async {
     config.requireConfigured();
     if (bytes.lengthInBytes > maxImageBytes) {
-      throw const AiException(
-        AiFailureKind.badPayload,
-        '图片超过 10MB 上限',
-      );
+      throw const AiException(AiFailureKind.badPayload, '图片超过 10MB 上限');
     }
     final Stopwatch sw = Stopwatch()..start();
-    int attempts = 0;
-    try {
-      attempts++;
-      final result = await _parseOnce(
-        bytes,
-        mime: mime,
-        sourceImageIndex: sourceImageIndex,
-      );
-      logAiParseSummary(
-        model: config.modelId,
-        ms: sw.elapsedMilliseconds,
-        retry: attempts - 1,
-        dto: result.dto,
-        rawBytes: result.rawContent.length,
-      );
-      return result;
-    } on AiException catch (e) {
-      if (!_isTransient(e)) {
-        rethrow;
-      }
-      // 抖动重试 1 次（截断/500/超时多半第二次成功）。
-      attempts++;
-      final result = await _parseOnce(
-        bytes,
-        mime: mime,
-        sourceImageIndex: sourceImageIndex,
-      );
-      logAiParseSummary(
-        model: config.modelId,
-        ms: sw.elapsedMilliseconds,
-        retry: attempts - 1,
-        dto: result.dto,
-        rawBytes: result.rawContent.length,
-      );
-      return result;
-    }
-  }
-
-  /// 瞬时故障才值得重试：5xx、超时断网、JSON 截断。
-  /// 确定性错误（鉴权、坏信封、数量非法）不重试。
-  bool _isTransient(AiException e) {
-    if (e.kind == AiFailureKind.network) {
-      return true;
-    }
-    if (e.kind == AiFailureKind.badStatus) {
-      return e.message.contains('500') ||
-          e.message.contains('502') ||
-          e.message.contains('503');
-    }
-    if (e.kind == AiFailureKind.badPayload) {
-      return e.message.contains('Unterminated') ||
-          e.message.contains('Unexpected end of input');
-    }
-    return false;
+    final result = await _parseOnce(
+      bytes,
+      mime: mime,
+      sourceImageIndex: sourceImageIndex,
+    );
+    logAiParseSummary(
+      model: config.modelId,
+      ms: sw.elapsedMilliseconds,
+      dto: result.dto,
+      rawBytes: result.rawContent.length,
+    );
+    return result;
   }
 
   Future<({AiReceiptDto dto, String rawContent})> _parseOnce(
@@ -138,10 +89,7 @@ class AiRecognitionService {
         <String, dynamic>{
           'role': 'user',
           'content': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'type': 'text',
-              'text': kReceiptUserPrompt,
-            },
+            <String, dynamic>{'type': 'text', 'text': kReceiptUserPrompt},
             <String, dynamic>{
               'type': 'image_url',
               'image_url': <String, dynamic>{
@@ -317,7 +265,6 @@ AiReceiptDto aiReceiptDtoFromPythonJson(
 void logAiParseSummary({
   required String model,
   required int ms,
-  required int retry,
   required AiReceiptDto dto,
   required int rawBytes,
 }) {
@@ -326,7 +273,7 @@ void logAiParseSummary({
     (int sum, AiReceiptItem e) => sum + (e.amount * 100).round(),
   );
   AppLogger.info(
-    'ai.parse ok model=$model ms=${ms}ms retry=$retry '
+    'ai.parse ok model=$model ms=${ms}ms '
     'items=${dto.items.length} base=$base分 '
     'disc=${dto.discountCents}分 sur=${dto.surchargeCents}分 '
     'rawBytes=$rawBytes '
@@ -335,7 +282,8 @@ void logAiParseSummary({
   );
 }
 
-String _mimeOf(String path) {  final String lower = path.toLowerCase();
+String _mimeOf(String path) {
+  final String lower = path.toLowerCase();
   if (lower.endsWith('.png')) {
     return 'image/png';
   }

@@ -79,7 +79,6 @@ class AppDatabase extends _$AppDatabase {
   /// 打开内存库（单测入口，每次全新）。
   AppDatabase.memory() : super(NativeDatabase.memory());
 
-  /// 未发布：版本号定死 1，不做升级迁移；改表直接改结构重建库。
   @override
   int get schemaVersion => 1;
 

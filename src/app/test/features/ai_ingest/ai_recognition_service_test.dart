@@ -38,30 +38,19 @@ void main() {
   );
 
   /// order 级折扣单（含字符串数字 + 围栏）。
-  String orderLevelContent() => '```json\n${jsonEncode(<String, dynamic>{
-    'merchant': '盒马',
-    'expense_date': '2026-09-21',
-    'subtotal': '54.00',
-    'total_discount': '-15.00',
-    'amount': '47.00',
-    'discount_model': 'order_level',
-    'items': <Map<String, dynamic>>[
-      <String, dynamic>{
-        'name': '牛奶',
-        'quantity': '2',
-        'unit_price': '15.00',
-        'amount': '30.00',
-        'paid_amount': '30.00',
-      },
-      <String, dynamic>{
-        'name': '面包',
-        'quantity': '1',
-        'unit_price': '24.00',
-        'amount': '24.00',
-        'paid_amount': '24.00',
-      },
-    ],
-  })}\n```';
+  String orderLevelContent() =>
+      '```json\n${jsonEncode(<String, dynamic>{
+        'merchant': '盒马',
+        'expense_date': '2026-09-21',
+        'subtotal': '54.00',
+        'total_discount': '-15.00',
+        'amount': '47.00',
+        'discount_model': 'order_level',
+        'items': <Map<String, dynamic>>[
+          <String, dynamic>{'name': '牛奶', 'quantity': '2', 'unit_price': '15.00', 'amount': '30.00', 'paid_amount': '30.00'},
+          <String, dynamic>{'name': '面包', 'quantity': '1', 'unit_price': '24.00', 'amount': '24.00', 'paid_amount': '24.00'},
+        ],
+      })}\n```';
 
   group('T6-1 真实信封解析', () {
     test('order 级折扣：基数+折扣摊入，paidAmount 存档', () async {
@@ -69,10 +58,7 @@ void main() {
         config: config,
         client: MockClient((http.Request request) async {
           expect(request.url.path, '/api/v1/chat/completions');
-          expect(
-            request.headers['Authorization'],
-            'Bearer test-key',
-          );
+          expect(request.headers['Authorization'], 'Bearer test-key');
           expect(request.headers['x-client-type'], 'cline-cli');
           return okJson(envelopeOf(orderLevelContent()));
         }),
@@ -90,14 +76,12 @@ void main() {
         dto.items.map((AiReceiptItem e) => (e.amount * 100).round()),
         <int>[3000, 2400],
       );
-      expect(
-        dto.discounts.single.amount,
-        -15.0,
-      );
+      expect(dto.discounts.single.amount, -15.0);
       expect(dto.items.first.paidAmount, 30.0);
     });
 
-    test('标准站无私有头：extraHeaders 为空则不发 x-client-type', () async {      const AiConfig plain = AiConfig(
+    test('标准站无私有头：extraHeaders 为空则不发 x-client-type', () async {
+      const AiConfig plain = AiConfig(
         baseUrl: 'https://example.test/api/v1',
         modelId: 'test-model',
         apiKey: 'test-key',
@@ -203,8 +187,8 @@ void main() {
         }),
       );
       addTearDown(service.close);
-      final ({AiReceiptDto dto, String rawContent}) result =
-          await service.parseImageBytesWithRaw(image);
+      final ({AiReceiptDto dto, String rawContent}) result = await service
+          .parseImageBytesWithRaw(image);
       expect(result.rawContent, contains('水'));
       expect(result.dto.items.single.name, '水');
     });
@@ -334,71 +318,53 @@ void main() {
       );
     });
 
-    test('500 重试一次后成功', () async {
+    test('500 直接抛 badStatus（单次，不重试）', () async {
       int calls = 0;
       final AiRecognitionService service = AiRecognitionService(
         config: config,
         client: MockClient((http.Request request) async {
           calls++;
-          if (calls == 1) {
-            return http.Response('busy', 500);
-          }
-          return okJson(
-            envelopeOf(
-              jsonEncode(<String, dynamic>{
-                'merchant': '店',
-                'items': <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'name': '水',
-                    'quantity': 1,
-                    'unit_price': 200,
-                    'amount': 200,
-                  },
-                ],
-              }),
-            ),
-          );
+          return http.Response('busy', 500);
         }),
       );
       addTearDown(service.close);
-      final AiReceiptDto dto = await service.parseImageBytes(image);
-      expect(dto.items.single.name, '水');
-      expect(calls, 2);
+      await expectLater(
+        service.parseImageBytes(image),
+        throwsA(
+          isA<AiException>().having(
+            (AiException e) => e.kind,
+            'kind',
+            AiFailureKind.badStatus,
+          ),
+        ),
+      );
+      expect(calls, 1);
     });
 
-    test('截断 JSON 重试一次后成功', () async {
+    test('截断 JSON 直接抛 badPayload（单次，不重试）', () async {
       int calls = 0;
       final AiRecognitionService service = AiRecognitionService(
         config: config,
         client: MockClient((http.Request request) async {
           calls++;
-          if (calls == 1) {
-            return okJson(envelopeOf('{"merchant": "店", "sub'));
-          }
-          return okJson(
-            envelopeOf(
-              jsonEncode(<String, dynamic>{
-                'merchant': '店',
-                'items': <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'name': '水',
-                    'quantity': 1,
-                    'unit_price': 200,
-                    'amount': 200,
-                  },
-                ],
-              }),
-            ),
-          );
+          return okJson(envelopeOf('{"merchant": "店", "sub'));
         }),
       );
       addTearDown(service.close);
-      final AiReceiptDto dto = await service.parseImageBytes(image);
-      expect(dto.merchant, '店');
-      expect(calls, 2);
+      await expectLater(
+        service.parseImageBytes(image),
+        throwsA(
+          isA<AiException>().having(
+            (AiException e) => e.kind,
+            'kind',
+            AiFailureKind.badPayload,
+          ),
+        ),
+      );
+      expect(calls, 1);
     });
 
-    test('确定性错误不重试（401 一次即抛）', () async {
+    test('401 直接抛 badStatus', () async {
       int calls = 0;
       final AiRecognitionService service = AiRecognitionService(
         config: config,
@@ -455,7 +421,8 @@ void main() {
       );
     });
 
-    test('称重小数 0.32 通过（c921 回归）', () async {      final AiRecognitionService service = AiRecognitionService(
+    test('称重小数 0.32 通过（c921 回归）', () async {
+      final AiRecognitionService service = AiRecognitionService(
         config: config,
         client: MockClient((http.Request request) async {
           return okJson(

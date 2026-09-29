@@ -36,7 +36,7 @@ class StandardRecognitionService {
   static const int maxImageBytes = 10 * 1024 * 1024;
   static const Duration timeout = Duration(seconds: 60);
 
-  /// 解析图片字节（抖动重试 1 次：超时/截断）。
+  /// 解析图片字节。
   Future<AiReceiptDto> parseImageBytes(
     Uint8List bytes, {
     String mime = 'image/jpeg',
@@ -47,52 +47,18 @@ class StandardRecognitionService {
       throw const AiException(AiFailureKind.badPayload, '图片超过 10MB 上限');
     }
     final Stopwatch sw = Stopwatch()..start();
-    int attempts = 0;
-    try {
-      attempts++;
-      final result = await _parseOnce(
-        bytes,
-        mime: mime,
-        sourceImageIndex: sourceImageIndex,
-      );
-      logAiParseSummary(
-        model: config.modelId,
-        ms: sw.elapsedMilliseconds,
-        retry: attempts - 1,
-        dto: result.dto,
-        rawBytes: result.rawBytes,
-      );
-      return result.dto;
-    } on AiException catch (e) {
-      if (!_isTransient(e)) {
-        rethrow;
-      }
-      attempts++;
-      final result = await _parseOnce(
-        bytes,
-        mime: mime,
-        sourceImageIndex: sourceImageIndex,
-      );
-      logAiParseSummary(
-        model: config.modelId,
-        ms: sw.elapsedMilliseconds,
-        retry: attempts - 1,
-        dto: result.dto,
-        rawBytes: result.rawBytes,
-      );
-      return result.dto;
-    }
-  }
-
-  bool _isTransient(AiException e) {
-    if (e.kind == AiFailureKind.network) {
-      return true;
-    }
-    if (e.kind == AiFailureKind.badPayload) {
-      return e.message.contains('Unterminated') ||
-          e.message.contains('Unexpected end of input');
-    }
-    return false;
+    final result = await _parseOnce(
+      bytes,
+      mime: mime,
+      sourceImageIndex: sourceImageIndex,
+    );
+    logAiParseSummary(
+      model: config.modelId,
+      ms: sw.elapsedMilliseconds,
+      dto: result.dto,
+      rawBytes: result.rawBytes,
+    );
+    return result.dto;
   }
 
   Future<({AiReceiptDto dto, int rawBytes})> _parseOnce(
