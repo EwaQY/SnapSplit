@@ -1,6 +1,8 @@
 # SQLite数据库文件
 data/*.db
 
+# 本地产物（.env、test_logs）各机自行写入 .git/info/exclude，不进共享忽略
+
 # 系统文件
 .DS_Store
 Thumbs.db

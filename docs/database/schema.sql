@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS "expense_item" (
     "shopping_list_id" TEXT NOT NULL,             -- 所属购物单ID
     "ledger_id" TEXT NOT NULL,                    -- 所属账本ID（冗余，便于查询）
     "name" TEXT NOT NULL,                         -- 商品/账目名称
-    "quantity" INTEGER NOT NULL DEFAULT 1,        -- 数量
+    "quantity" REAL NOT NULL DEFAULT 1.0,          -- 数量（称重允许小数）
     "unit_price" INTEGER NOT NULL DEFAULT 0,      -- 单价（分）
     "final_amount" INTEGER NOT NULL,              -- 最终金额（分，已摊入折扣/附加费）
     "payer_id" TEXT NOT NULL,                     -- 付款人/垫付人用户ID

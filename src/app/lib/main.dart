@@ -1,7 +1,45 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:io';
 
-void main() {
-  runApp(const MyApp());
+import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'src/core/logging/app_logger.dart';
+
+Future<void> main() async {
+  await runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      // 日志目录准备与旧日志清理在后台做，不堵首帧。
+      unawaited(_initLogging());
+      FlutterError.onError = (FlutterErrorDetails details) {
+        AppLogger.err(
+          details.exception,
+          details.stack ?? StackTrace.empty,
+          tag: 'flutter',
+        );
+      };
+      runApp(const MyApp());
+    },
+    (Object error, StackTrace stack) {
+      AppLogger.err(error, stack, tag: 'zone');
+    },
+  );
+}
+
+/// 日志初始化（失败不影响启动）。
+Future<void> _initLogging() async {
+  try {
+    final Directory support = await getApplicationSupportDirectory();
+    await AppLogger.init(
+      logDir: Directory(
+        '${support.path}${Platform.pathSeparator}logs',
+      ),
+    );
+  } catch (_) {
+    // 取不到目录时退化为控制台日志。
+    debugPrint('AppLogger.init skipped: no support dir');
+  }
 }
 
 class MyApp extends StatelessWidget {
