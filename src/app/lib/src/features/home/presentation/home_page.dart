@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/app_tab_bar.dart';
+import '../widgets/budget_card.dart';
+import '../widgets/entry_actions.dart';
 
-/// 首页空壳（验收底导专用）：页面留空，只挂自画 [AppTabBar]。
+/// 首页空壳：页面仅挂录入行，其余待后续指令逐项加。
 ///
-/// 地基验收通过前不加标题/录入口/占位卡；ephemeral 底导状态用 `setState`。
+/// 录入口点击本期均为占位提示（AI 链路下期）；底导见 [AppTabBar]。
 class HomePage extends StatefulWidget {
   /// 创建首页空壳。
   const HomePage({super.key});
@@ -36,13 +38,39 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _handleEntryPlaceholder() {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('录入页下期再做，本期先看样式')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 首页 body 留空待后续挂件；账本/我的仅极简占位标题，
-      // 真实页面属黑名单，下期再做。
+      // 首页 body 挂录入行（页面水平边距 16）；
+      // 账本/我的 Tab 保持极简占位标题，真实页面属黑名单，下期再做。
       body: _currentIndex == 0
-          ? const SizedBox.expand()
+          ? SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
+                    children: <Widget>[
+                      EntryActions(
+                        onScreenshotTap: _handleEntryPlaceholder,
+                        onPhotoTap: _handleEntryPlaceholder,
+                        onManualTap: _handleEntryPlaceholder,
+                      ),
+                      const SizedBox(height: 16),
+                      const BudgetCard(),
+                    ],
+                  ),
+                ),
+              ),
+            )
           : _PlaceholderBody(index: _currentIndex),
       bottomNavigationBar: AppTabBar(
         currentIndex: _currentIndex,
