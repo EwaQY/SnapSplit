@@ -5,6 +5,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/utils/app_time.dart';
 import '../../budget/data/budget_repository.dart';
 import '../../timeline/data/timeline_entries.dart';
+import 'home_filter.dart';
 
 /// 首页预算进度：当前“我” + 自然当月的 [BudgetProgress] 只读聚合。
 ///
@@ -43,9 +44,27 @@ typedef HomeRecentData = ({
   Map<String, String> ledgerNames,
 });
 
+/// 首页筛选条件（内存过滤，变更后最近列表自动重刷）。
+class HomeFilterNotifier extends Notifier<HomeFilter> {
+  @override
+  HomeFilter build() => const HomeFilter();
+
+  /// 应用新条件（列表自动重刷）。
+  void apply(HomeFilter filter) {
+    state = filter;
+  }
+}
+
+/// 首页筛选条件 provider。
+final homeFilterProvider =
+    NotifierProvider<HomeFilterNotifier, HomeFilter>(
+      HomeFilterNotifier.new,
+    );
+
 /// 首页最近：跨所有账本扇出后按发生时间倒序合并，默认只留近 7 天。
 ///
-/// 只读聚合放 UI 侧，不污染后端 Repository；渲染侧懒加载。
+/// 只读聚合放 UI 侧，不污染后端 Repository；渲染侧懒加载；
+/// 日期条件为空时按默认窗口，有起止日期则按整天展开替代窗口。
 class HomeRecentNotifier extends AsyncNotifier<HomeRecentData> {
   /// 默认窗口：近 7 天（秒）。
   static const int defaultWindowSeconds = 7 * 24 * 3600;
@@ -60,6 +79,7 @@ class HomeRecentNotifier extends AsyncNotifier<HomeRecentData> {
   }
 
   Future<HomeRecentData> _fetch() async {
+    final HomeFilter filter = ref.watch(homeFilterProvider);
     final List<Ledger> ledgers = await ref.watch(
       ledgerListProvider.future,
     );
@@ -78,14 +98,45 @@ class HomeRecentNotifier extends AsyncNotifier<HomeRecentData> {
       (TimelineEntry a, TimelineEntry b) =>
           b.occurredAt.compareTo(a.occurredAt),
     );
-    final int cutoff = nowUnixSeconds() - defaultWindowSeconds;
+    final int now = nowUnixSeconds();
+    final int windowStart = filter.startDate != null
+        ? _dayStartSeconds(filter.startDate!)
+        : now - defaultWindowSeconds;
+    final int? windowEnd = filter.endDate != null
+        ? _dayEndSeconds(filter.endDate!)
+        : null;
     return (
       entries: <TimelineEntry>[
         for (final TimelineEntry entry in merged)
-          if (entry.occurredAt >= cutoff) entry,
+          if (matchesHomeFilter(
+            entry,
+            filter,
+            windowStartSeconds: windowStart,
+            windowEndSeconds: windowEnd,
+          ))
+            entry,
       ],
       ledgerNames: names,
     );
+  }
+
+  /// 当天 00:00:00（本地时区，Unix 秒）。
+  int _dayStartSeconds(DateTime date) {
+    return DateTime(date.year, date.month, date.day).millisecondsSinceEpoch ~/
+        1000;
+  }
+
+  /// 当天 23:59:59（本地时区，Unix 秒）。
+  int _dayEndSeconds(DateTime date) {
+    return DateTime(
+          date.year,
+          date.month,
+          date.day,
+          23,
+          59,
+          59,
+        ).millisecondsSinceEpoch ~/
+        1000;
   }
 }
 

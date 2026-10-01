@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../widgets/app_tab_bar.dart';
 import '../widgets/budget_card.dart';
 import '../widgets/entry_actions.dart';
@@ -51,7 +52,8 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 首页 body 挂录入行（页面水平边距 16）；
+      // 首页 body：标题 + 录入行 + 预算卡 + 最近卡，垂直自动布局；
+      // 标题与录入行 gap 12（口径暂定，见样式文档 §2），卡间 gap 16；
       // 账本/我的 Tab 保持极简占位标题，真实页面属黑名单，下期再做。
       body: _currentIndex == 0
           ? SafeArea(
@@ -59,15 +61,24 @@ class _HomePageState extends State<HomePage> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                   child: Column(
+                    spacing: 16,
                     children: <Widget>[
-                      EntryActions(
-                        onScreenshotTap: _handleEntryPlaceholder,
-                        onPhotoTap: _handleEntryPlaceholder,
-                        onManualTap: _handleEntryPlaceholder,
+                      Column(
+                        spacing: 12,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('首页', style: AppTheme.pageTitle),
+                          ),
+                          EntryActions(
+                            onScreenshotTap: _handleEntryPlaceholder,
+                            onPhotoTap: _handleEntryPlaceholder,
+                            onManualTap: _handleEntryPlaceholder,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
                       const BudgetCard(),
-                      const SizedBox(height: 16),
                       const RecentSection(),
                     ],
                   ),

@@ -7,7 +7,9 @@ import '../providers/home_providers.dart';
 
 /// 首页预算卡：标题 + 金额 + 三色进度条 + 百分比；超支仅警告不阻断。
 ///
-/// - 标题“{M}月预算” + 金额“¥已消费 / ¥预算” + 进度条 + “已用 N%”；
+/// 自动布局：垂直 gap 8，内边距 `14/16/14/16`，高 Hug 不写死；
+/// 进度条轨道宽 Fill（`double.infinity`）、高 6、圆角 3；
+/// - 标题 17/700 黑 + 金额 22/900 黑 + 进度条 + 百分比 13/400 灰；
 /// - 进度色：<50% 蓝 / 50–90% 橙 / ≥90% 红；超支仅红字警告，不阻断；
 /// - 未设预算：金额分母显示“未设置”，进度条置灰；
 /// - 三态：loading 转圈占位 / error 展示 + 重试 / data 渲染。
@@ -21,7 +23,7 @@ class BudgetCard extends ConsumerWidget {
         ref.watch(currentBudgetProgressProvider);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: progress.when(
           loading: () => const _BudgetLoading(),
           error: (Object error, StackTrace stack) => _BudgetError(
@@ -48,7 +50,7 @@ class _BudgetLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SizedBox(
-      height: 93,
+      height: 97,
       child: Center(child: CircularProgressIndicator()),
     );
   }
@@ -65,13 +67,13 @@ class _BudgetError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 93,
+      height: 97,
       child: Center(
         child: Column(
+          spacing: 8,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text('预算加载失败', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 8),
+            Text('预算加载失败', style: AppTheme.rowTitle),
             FilledButton(onPressed: onRetry, child: const Text('重试')),
           ],
         ),
@@ -100,7 +102,6 @@ class _BudgetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
     final int month = DateTime.now().month;
     final int? budgetCents = budget;
     final double ratio = budgetCents == null || budgetCents <= 0
@@ -122,33 +123,30 @@ class _BudgetBody extends StatelessWidget {
         ? AppTheme.dangerRed
         : AppTheme.secondaryGray;
     return Column(
+      spacing: 8,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          '$month月预算',
-          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
+        Text('$month月预算', style: AppTheme.sectionTitle),
         Text(
           budgetCents == null
               ? '¥${formatCents(spent)} / 未设置'
               : '¥${formatCents(spent)} / ¥${formatCents(budgetCents)}',
-          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style: AppTheme.budgetAmount,
         ),
-        const SizedBox(height: 6),
         ClipRRect(
-          borderRadius: const BorderRadius.all(Radius.circular(4)),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(AppTheme.radiusTrack),
+          ),
           child: LinearProgressIndicator(
             value: ratio,
-            minHeight: 8,
-            backgroundColor: AppTheme.grayButtonBackground,
+            minHeight: 6,
+            backgroundColor: AppTheme.trackGray,
             valueColor: AlwaysStoppedAnimation<Color>(barColor),
           ),
         ),
-        const SizedBox(height: 6),
         Text(
           percent,
-          style: textTheme.bodySmall?.copyWith(color: percentColor),
+          style: AppTheme.rowSubtitle.copyWith(color: percentColor),
         ),
       ],
     );

@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// 最近列表行：左列标题 + 副标题，右对金额。
+///
+/// 自动布局：水平 space-between，外边距 `10/12/10/12`，圆角 9，底 `#F2F2F7`；
+/// 左列 Fill（标题 13/400 黑 + 副标题 13/400 灰，垂直 gap 4），右金额 16/700 黑。
 class RecentItemCard extends StatelessWidget {
   /// 创建最近列表行。
   const RecentItemCard({
@@ -23,42 +26,29 @@ class RecentItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: const BoxDecoration(
-        color: AppTheme.grayButtonBackground,
+        color: AppTheme.rowBackground,
         borderRadius: BorderRadius.all(
-          Radius.circular(AppTheme.radiusLarge),
+          Radius.circular(AppTheme.radiusSmall),
         ),
       ),
       child: Row(
+        spacing: 12,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
           Expanded(
             child: Column(
+              spacing: 4,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  title,
-                  style: textTheme.bodySmall,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: AppTheme.secondaryGray,
-                  ),
-                ),
+                Text(title, style: AppTheme.rowTitle),
+                Text(subtitle, style: AppTheme.rowSubtitle),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            amountText,
-            style: textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(amountText, style: AppTheme.rowAmount),
         ],
       ),
     );

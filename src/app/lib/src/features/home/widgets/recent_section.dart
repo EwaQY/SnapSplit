@@ -5,15 +5,18 @@ import '../../../core/database/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money.dart';
 import '../../timeline/data/timeline_entries.dart';
+import '../presentation/filter_sheet.dart';
+import '../providers/home_filter.dart';
 import '../providers/home_providers.dart';
 import 'recent_item_card.dart';
 
 /// 首页最近分区：白卡标题 + 筛选行 + 跨账本倒序列表。
 ///
-/// - 白卡：标题“最近” + 筛选行（所有账本 / 近7天 / 筛选按钮）；
+/// 自动布局：垂直 gap 8，内边距 `14/16/14/16`，高 Hug 不写死；
+/// - 白卡：标题“最近”17/700 黑 + 筛选行 + 列表；
 /// - 列表跨账本倒序，默认近 7 天（provider 内过滤）；
-/// - 三态：loading 占位 / error + 重试 / 空（暂无记录）/ 到底（没有更多了）；
-/// - “筛选”按钮本期占位（P-UI3 接筛选弹窗）。
+/// - 三态：loading 占位 / error + 重试 / 空（暂无记录）/ 到底（没有更多了 12/400 灰居中）；
+/// - “筛选”按钮打开筛选弹窗，确定后回刷列表（内存过滤）。
 class RecentSection extends ConsumerWidget {
   /// 创建最近分区。
   const RecentSection({super.key});
@@ -23,25 +26,15 @@ class RecentSection extends ConsumerWidget {
     final AsyncValue<HomeRecentData> recent = ref.watch(homeRecentProvider);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Column(
+          spacing: 8,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              '最近',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
+            Text('最近', style: AppTheme.sectionTitle),
             _FilterRow(
-              onFilterTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('筛选弹窗下期再做')),
-                );
-              },
+              onFilterTap: () => showHomeFilterSheet(context),
             ),
-            const SizedBox(height: 12),
             recent.when(
               loading: () => const _RecentLoading(),
               error: (Object error, StackTrace stack) => _RecentError(
@@ -57,8 +50,11 @@ class RecentSection extends ConsumerWidget {
   }
 }
 
-/// 筛选行：当前范围摘要（默认所有账本 / 近7天）+ 筛选按钮。
-class _FilterRow extends StatelessWidget {
+/// 筛选行：左摘要（账本范围 / 日期范围 14/400 灰 + 16 灰图标），右筛选键。
+///
+/// 摘要随 [homeFilterProvider] 实时变化：未设日期显示“近7天”，
+/// 已设则显示起止 MM-dd。
+class _FilterRow extends ConsumerWidget {
   /// 创建筛选行。
   const _FilterRow({required this.onFilterTap});
 
@@ -66,56 +62,67 @@ class _FilterRow extends StatelessWidget {
   final VoidCallback onFilterTap;
 
   @override
-  Widget build(BuildContext context) {
-    final TextStyle? summaryStyle = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(
-      fontSize: 13,
-      color: AppTheme.secondaryGray,
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final HomeFilter filter = ref.watch(homeFilterProvider);
+    final Map<String, String> names =
+        ref.watch(homeRecentProvider).value?.ledgerNames ??
+        <String, String>{};
+    final String ledgerText = filter.ledgerId == null
+        ? '所有账本'
+        : names[filter.ledgerId] ?? '所有账本';
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: <Widget>[
-        const Icon(
-          Icons.receipt_long_outlined,
-          size: 16,
-          color: AppTheme.secondaryGray,
+        Row(
+          spacing: 4,
+          children: <Widget>[
+            const Icon(
+              Icons.receipt_long_outlined,
+              size: 16,
+              color: AppTheme.filterGray,
+            ),
+            Text(ledgerText, style: AppTheme.filterSummary),
+            const SizedBox(width: 12),
+            const Icon(
+              Icons.date_range_outlined,
+              size: 16,
+              color: AppTheme.filterGray,
+            ),
+            Text(_dateText(filter), style: AppTheme.filterSummary),
+          ],
         ),
-        const SizedBox(width: 4),
-        Text('所有账本', style: summaryStyle),
-        const SizedBox(width: 12),
-        const Icon(
-          Icons.date_range_outlined,
-          size: 16,
-          color: AppTheme.secondaryGray,
-        ),
-        const SizedBox(width: 4),
-        Text('近7天', style: summaryStyle),
-        const Spacer(),
         InkWell(
           onTap: onFilterTap,
           borderRadius: const BorderRadius.all(
-            Radius.circular(AppTheme.radiusLarge),
+            Radius.circular(AppTheme.radiusSmall),
           ),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            decoration: const BoxDecoration(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+            decoration: BoxDecoration(
               color: AppTheme.lightBlueBackground,
-              borderRadius: BorderRadius.all(
-                Radius.circular(AppTheme.radiusLarge),
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppTheme.radiusSmall),
               ),
             ),
-            child: Text(
-              '筛选',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontSize: 13,
-                color: AppTheme.primaryBlue,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: Text('筛选', style: AppTheme.filterLabel),
           ),
         ),
       ],
     );
+  }
+
+  /// 日期摘要：未设为“近7天”，已设显示起止 MM-dd（半开区间只显示已设端）。
+  String _dateText(HomeFilter filter) {
+    final DateTime? start = filter.startDate;
+    final DateTime? end = filter.endDate;
+    if (start == null && end == null) {
+      return '近7天';
+    }
+    String part(DateTime? date) => date == null
+        ? ''
+        : '${date.month.toString().padLeft(2, '0')}-'
+              '${date.day.toString().padLeft(2, '0')}';
+    return '${part(start)}~${part(end)}';
   }
 }
 
@@ -147,10 +154,10 @@ class _RecentError extends StatelessWidget {
       height: 120,
       child: Center(
         child: Column(
+          spacing: 8,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text('最近列表加载失败', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 8),
+            Text('最近列表加载失败', style: AppTheme.rowTitle),
             FilledButton(onPressed: onRetry, child: const Text('重试')),
           ],
         ),
@@ -173,16 +180,12 @@ class _RecentList extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Center(
-          child: Text(
-            '暂无最近记录',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.secondaryGray,
-            ),
-          ),
+          child: Text('暂无最近记录', style: AppTheme.filterSummary),
         ),
       );
     }
     return Column(
+      spacing: 8,
       children: <Widget>[
         ListView.builder(
           shrinkWrap: true,
@@ -192,21 +195,14 @@ class _RecentList extends StatelessWidget {
             final TimelineEntry entry = data.entries[index];
             return Padding(
               padding: EdgeInsets.only(
-                bottom: index == data.entries.length - 1 ? 0 : 12,
+                bottom: index == data.entries.length - 1 ? 0 : 8,
               ),
               child: _rowFor(entry, data.ledgerNames),
             );
           },
         ),
-        const SizedBox(height: 12),
         Center(
-          child: Text(
-            '没有更多了',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 11,
-              color: AppTheme.secondaryGray,
-            ),
-          ),
+          child: Text('没有更多了', style: AppTheme.moreLabel),
         ),
       ],
     );

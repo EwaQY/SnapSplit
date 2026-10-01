@@ -4,6 +4,8 @@ import '../../../core/theme/app_theme.dart';
 
 /// 首页录入口：左大蓝块 + 右两小按钮；图标取 M3 标准 `Icons.*`。
 ///
+/// 自动布局：左 `194×108` + gap 8 + 右列 `156×108（50+8+50）`；
+/// 左块纵贯右两行等高（`IntrinsicHeight` + stretch），右列垂直 gap 8。
 /// 本期均为占位回调（AI 链路下期），点击行为由调用方传入。
 class EntryActions extends StatelessWidget {
   /// 创建录入口。
@@ -25,9 +27,9 @@ class EntryActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle? buttonText = Theme.of(context).textTheme.titleMedium;
     return IntrinsicHeight(
       child: Row(
+        spacing: 8,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Expanded(
@@ -37,29 +39,25 @@ class EntryActions extends StatelessWidget {
               foreground: AppTheme.onPrimaryBlue,
               label: '截图录入',
               icon: Icons.photo_camera_outlined,
-              textStyle: buttonText,
               onTap: onScreenshotTap,
             ),
           ),
-          const SizedBox(width: 8),
           Expanded(
             flex: 156,
             child: Column(
+              spacing: 8,
               children: <Widget>[
                 _EntryButton(
                   background: AppTheme.lightBlueBackground,
                   foreground: AppTheme.primaryBlue,
                   label: '拍照录入',
-                  textStyle: buttonText,
                   height: 50,
                   onTap: onPhotoTap,
                 ),
-                const SizedBox(height: 8),
                 _EntryButton(
                   background: AppTheme.grayButtonBackground,
                   foreground: Colors.black,
                   label: '手动录入',
-                  textStyle: buttonText,
                   height: 50,
                   onTap: onManualTap,
                 ),
@@ -72,7 +70,7 @@ class EntryActions extends StatelessWidget {
   }
 }
 
-/// 录入单按钮：底色 + 居中内容（可选前置图标），圆角 16。
+/// 录入单按钮：底色 + 居中内容（可选前置图标），圆角 12，字 17/700。
 class _EntryButton extends StatelessWidget {
   /// 创建录入单按钮。
   const _EntryButton({
@@ -82,7 +80,6 @@ class _EntryButton extends StatelessWidget {
     required this.onTap,
     this.icon,
     this.height,
-    this.textStyle,
   });
 
   /// 底色（经 [AppTheme] 取用，不硬编码）。
@@ -103,9 +100,6 @@ class _EntryButton extends StatelessWidget {
   /// 固定高度（可空：为空时由父级 stretch 撑满，用于左侧大蓝块）。
   final double? height;
 
-  /// 文字样式基底（颜色由 [foreground] 覆盖）。
-  final TextStyle? textStyle;
-
   @override
   Widget build(BuildContext context) {
     final IconData? iconData = icon;
@@ -123,19 +117,11 @@ class _EntryButton extends StatelessWidget {
           Radius.circular(AppTheme.radiusLarge),
         ),
         child: Row(
+          spacing: 5,
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (iconData != null) ...<Widget>[
-              Icon(iconData, color: foreground),
-              const SizedBox(width: 8),
-            ],
-            Text(
-              label,
-              style: textStyle?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            if (iconData != null) Icon(iconData, color: foreground),
+            Text(label, style: AppTheme.entryLabel(foreground)),
           ],
         ),
       ),
