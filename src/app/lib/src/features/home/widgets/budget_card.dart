@@ -5,7 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money.dart';
 import '../providers/home_providers.dart';
 
-/// 首页预算卡：对照 Figma 356×125 Hug 手搓。
+/// 首页预算卡：标题 + 金额 + 三色进度条 + 百分比；超支仅警告不阻断。
 ///
 /// - 标题“{M}月预算” + 金额“¥已消费 / ¥预算” + 进度条 + “已用 N%”；
 /// - 进度色：<50% 蓝 / 50–90% 橙 / ≥90% 红；超支仅红字警告，不阻断；

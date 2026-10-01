@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 首页主题：亮主题先行，对照 `figma/SnapSplit-首页.png` 取色。
+/// 首页主题：亮主题先行，色值只落在此文件，业务 Widget 禁止硬编码。
 ///
 /// 约定：色值只落在此文件，业务 Widget 一律经 [AppTheme] 取用，
 /// 禁止在业务 Widget 里硬编码色值与文本样式。

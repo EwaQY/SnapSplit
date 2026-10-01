@@ -2,14 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
-/// 首页录入口：对照 Figma（390宽）手搓。
+/// 首页录入口：左大蓝块 + 右两小按钮；图标取 M3 标准 `Icons.*`。
 ///
-/// - 左“截图录入”194×108：主蓝底 + 白字 + 相机图标，纵贯右侧两行等高
-///  （`IntrinsicHeight` + stretch）；
-/// - 右 156×108：上“拍照录入”156×50（浅蓝底 + 蓝字），下“手动录入”
-///   156×50（灰底 + 黑字），50 + 8 + 50 = 108；
-/// - 行内间距 8，宽按 flex 194:156 走，高按绝对值走；
-/// - 图标取 M3 标准 `Icons.*`，不导 SVG。
 /// 本期均为占位回调（AI 链路下期），点击行为由调用方传入。
 class EntryActions extends StatelessWidget {
   /// 创建录入口。

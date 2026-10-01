@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../widgets/app_tab_bar.dart';
 import '../widgets/budget_card.dart';
 import '../widgets/entry_actions.dart';
+import '../widgets/recent_section.dart';
 
 /// 首页空壳：页面仅挂录入行，其余待后续指令逐项加。
 ///
@@ -28,7 +29,7 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) {
       return;
     }
-    // 切换选中态（对照 Figma 三选中态），body 仅极简占位，
+    // 切换选中态，body 仅极简占位；真实页面下期再做。
     // 账本详情/我的真实页面属黑名单，下期再做。
     setState(() {
       _currentIndex = index;
@@ -66,6 +67,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 16),
                       const BudgetCard(),
+                      const SizedBox(height: 16),
+                      const RecentSection(),
                     ],
                   ),
                 ),

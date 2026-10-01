@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/utils/app_time.dart';
 import '../../budget/data/budget_repository.dart';
+import '../../timeline/data/timeline_entries.dart';
 
 /// 首页预算进度：当前“我” + 自然当月的 [BudgetProgress] 只读聚合。
 ///
@@ -33,4 +35,62 @@ class CurrentBudgetProgressNotifier extends AsyncNotifier<BudgetProgress> {
 final currentBudgetProgressProvider =
     AsyncNotifierProvider<CurrentBudgetProgressNotifier, BudgetProgress>(
       CurrentBudgetProgressNotifier.new,
+    );
+
+/// 首页最近数据：跨账本条目（倒序）+ 账本名映射，只读聚合不碰后端。
+typedef HomeRecentData = ({
+  List<TimelineEntry> entries,
+  Map<String, String> ledgerNames,
+});
+
+/// 首页最近：跨所有账本扇出后按发生时间倒序合并，默认只留近 7 天。
+///
+/// 只读聚合放 UI 侧，不污染后端 Repository；渲染侧懒加载。
+class HomeRecentNotifier extends AsyncNotifier<HomeRecentData> {
+  /// 默认窗口：近 7 天（秒）。
+  static const int defaultWindowSeconds = 7 * 24 * 3600;
+
+  @override
+  Future<HomeRecentData> build() => _fetch();
+
+  /// 重试入口（首错直抛由 UI 重试）。
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetch);
+  }
+
+  Future<HomeRecentData> _fetch() async {
+    final List<Ledger> ledgers = await ref.watch(
+      ledgerListProvider.future,
+    );
+    final Map<String, String> names = <String, String>{
+      for (final Ledger ledger in ledgers) ledger.id: ledger.name,
+    };
+    final List<TimelineEntry> merged = <TimelineEntry>[];
+    for (final Ledger ledger in ledgers) {
+      merged.addAll(
+        await ref
+            .watch(timelineRepositoryProvider)
+            .listTimeline(ledger.id),
+      );
+    }
+    merged.sort(
+      (TimelineEntry a, TimelineEntry b) =>
+          b.occurredAt.compareTo(a.occurredAt),
+    );
+    final int cutoff = nowUnixSeconds() - defaultWindowSeconds;
+    return (
+      entries: <TimelineEntry>[
+        for (final TimelineEntry entry in merged)
+          if (entry.occurredAt >= cutoff) entry,
+      ],
+      ledgerNames: names,
+    );
+  }
+}
+
+/// 首页最近 provider。
+final homeRecentProvider =
+    AsyncNotifierProvider<HomeRecentNotifier, HomeRecentData>(
+      HomeRecentNotifier.new,
     );

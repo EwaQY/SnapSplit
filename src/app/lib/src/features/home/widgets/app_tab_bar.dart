@@ -2,15 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
-/// 首页底部导航：对照 `figma/TabBar.png` 手搓，不用 M3 `NavigationBar`。
+/// 首页底部导航：白底 + 顶部细线，三项均分；选中整项变蓝，未选中灰。
 ///
-/// 设计（`docs/plans/frontend-home-plan.md` §1.5）：
-/// - 整条 390 Fill × 64，白底 + 顶部细线（不含系统手势区，另由 `SafeArea` 垫）；
-/// - 单项 100 × 38 Hug：图标 22 + 间距 2 + 字 12（行高 1.0）+ 上下 padding 各 1；
-/// - 余下 (64 - 38) / 2 = 13 为上下留白；
-/// - 选中整项走主蓝，未选中走灰；图标取 M3 标准 `Icons.*`，不导 SVG。
-/// 本期仅首页可点，其余两项为占位：点击经 [onPlaceholderTap] 轻提示，
-/// 不做页面跳转（账本详情/我的页属黑名单，下期再做）。
+/// 图标取 M3 标准 `Icons.*`。本期仅首页可点，其余两项占位：
+/// 点击经 [onPlaceholderTap] 回调，不做页面跳转。
 class AppTabBar extends StatelessWidget {
   /// 创建底部导航。
   const AppTabBar({
@@ -70,7 +65,7 @@ class AppTabBar extends StatelessWidget {
   }
 }
 
-/// 底导单项：图标 + 文字竖排，内容总高 38，选中仅变蓝、不换实心图标。
+/// 底导单项：图标 + 文字竖排，选中仅变蓝、不换实心图标。
 class _TabItem extends StatelessWidget {
   /// 创建底导单项。
   const _TabItem({
@@ -100,7 +95,6 @@ class _TabItem extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          // 内容总高 38 = 1 + 22图标 + 2 + 12文字 + 1。
           padding: const EdgeInsets.symmetric(vertical: 1),
           child: Column(
             mainAxisSize: MainAxisSize.min,
