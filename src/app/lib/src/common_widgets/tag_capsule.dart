@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../core/theme/app_theme.dart';
 
 /// 标签胶囊：选中蓝底白字，未选中灰底黑字；字 13/400。
 ///

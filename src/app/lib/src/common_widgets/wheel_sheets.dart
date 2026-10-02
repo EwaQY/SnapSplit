@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../core/theme/app_theme.dart';
 
 /// 滚轮选项（单选/多选共用）。
 class WheelOption<T> {

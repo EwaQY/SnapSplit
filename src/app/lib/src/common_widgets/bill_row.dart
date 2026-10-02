@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../core/theme/app_theme.dart';
 
-/// 最近列表行：左列标题 + 副标题，右对金额。
+/// 单张账单行：左列标题 + 副标题，右对金额（三业务共用）。
 ///
 /// 自动布局：水平 space-between，外边距 `10/12/10/12`，圆角 9，底 `#F2F2F7`；
 /// 左列 Fill（标题 13/400 黑 + 副标题 13/400 灰，垂直 gap 4），右金额 16/700 黑。
-class RecentItemCard extends StatelessWidget {
-  /// 创建最近列表行。
-  const RecentItemCard({
+class BillRow extends StatelessWidget {
+  /// 创建账单行。
+  const BillRow({
     super.key,
     required this.title,
     required this.subtitle,

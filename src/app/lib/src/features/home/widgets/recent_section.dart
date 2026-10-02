@@ -4,11 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money.dart';
+import '../../../common_widgets/async_state_box.dart';
+import '../../../common_widgets/bill_list.dart';
 import '../../timeline/data/timeline_entries.dart';
 import '../presentation/filter_sheet.dart';
 import '../providers/home_filter.dart';
 import '../providers/home_providers.dart';
-import 'recent_item_card.dart';
 
 /// 首页最近分区：白卡标题 + 筛选行 + 跨账本倒序列表。
 ///
@@ -36,12 +37,18 @@ class RecentSection extends ConsumerWidget {
               onFilterTap: () => showHomeFilterSheet(context),
             ),
             recent.when(
-              loading: () => const _RecentLoading(),
-              error: (Object error, StackTrace stack) => _RecentError(
+              loading: () => const LoadingBox(height: 120),
+              error: (Object error, StackTrace stack) => ErrorRetryBox(
+                message: '最近列表加载失败',
                 onRetry: () =>
                     ref.read(homeRecentProvider.notifier).refresh(),
               ),
-              data: (HomeRecentData data) => _RecentList(data: data),
+              data: (HomeRecentData data) => BillList(
+                rows: <BillRowData>[
+                  for (final TimelineEntry entry in data.entries)
+                    _rowFor(entry, data.ledgerNames),
+                ],
+              ),
             ),
           ],
         ),
@@ -126,126 +133,43 @@ class _FilterRow extends ConsumerWidget {
   }
 }
 
-/// 最近加载态。
-class _RecentLoading extends StatelessWidget {
-  /// 创建加载态。
-  const _RecentLoading();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 120,
-      child: Center(child: CircularProgressIndicator()),
-    );
-  }
-}
-
-/// 最近失败态 + 重试。
-class _RecentError extends StatelessWidget {
-  /// 创建失败态。
-  const _RecentError({required this.onRetry});
-
-  /// 重试回调。
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 120,
-      child: Center(
-        child: Column(
-          spacing: 8,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text('最近列表加载失败', style: AppTheme.rowTitle),
-            FilledButton(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 最近列表：懒加载 + 空态 + 到底标记。
-class _RecentList extends StatelessWidget {
-  /// 创建最近列表。
-  const _RecentList({required this.data});
-
-  /// 聚合数据。
-  final HomeRecentData data;
-
-  @override
-  Widget build(BuildContext context) {
-    if (data.entries.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: Text('暂无最近记录', style: AppTheme.filterSummary),
-        ),
+/// 条目转行数据：单账目降维为账目，多账目取标题 + 合计，转账独立行。
+BillRowData _rowFor(
+  TimelineEntry entry,
+  Map<String, String> ledgerNames,
+) {
+  switch (entry) {
+    case SingleItemEntry(header: final ShoppingList header, detail: final detail):
+      return (
+        title: detail.item.name,
+        subtitle:
+            '${ledgerNames[header.ledgerId] ?? '未知账本'} · ${_date(header.occurredAt)}',
+        amountText: '¥${formatCents(detail.item.finalAmount)}',
       );
-    }
-    return Column(
-      spacing: 8,
-      children: <Widget>[
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: data.entries.length,
-          itemBuilder: (BuildContext context, int index) {
-            final TimelineEntry entry = data.entries[index];
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: index == data.entries.length - 1 ? 0 : 8,
-              ),
-              child: _rowFor(entry, data.ledgerNames),
-            );
-          },
-        ),
-        Center(
-          child: Text('没有更多了', style: AppTheme.moreLabel),
-        ),
-      ],
-    );
+    case ShoppingEntry(header: final ShoppingList header, items: final items):
+      final int total = items.fold(
+        0,
+        (int sum, item) => sum + item.item.finalAmount,
+      );
+      return (
+        title: header.title ?? '购物单',
+        subtitle:
+            '${ledgerNames[header.ledgerId] ?? '未知账本'} · ${_date(header.occurredAt)}',
+        amountText: '¥${formatCents(total)}',
+      );
+    case TransferEntry(transfer: final Transfer transfer):
+      return (
+        title: '转账',
+        subtitle:
+            '${ledgerNames[transfer.ledgerId] ?? '未知账本'} · ${_date(transfer.occurredAt)}',
+        amountText: '¥${formatCents(transfer.amount)}',
+      );
   }
+}
 
-  /// 条目转行：单账目降维为账目，多账目取标题 + 合计，转账独立行。
-  RecentItemCard _rowFor(
-    TimelineEntry entry,
-    Map<String, String> ledgerNames,
-  ) {
-    switch (entry) {
-      case SingleItemEntry(header: final ShoppingList header, detail: final detail):
-        return RecentItemCard(
-          title: detail.item.name,
-          subtitle:
-              '${ledgerNames[header.ledgerId] ?? '未知账本'} · ${_date(header.occurredAt)}',
-          amountText: '¥${formatCents(detail.item.finalAmount)}',
-        );
-      case ShoppingEntry(header: final ShoppingList header, items: final items):
-        final int total = items.fold(
-          0,
-          (int sum, item) => sum + item.item.finalAmount,
-        );
-        return RecentItemCard(
-          title: header.title ?? '购物单',
-          subtitle:
-              '${ledgerNames[header.ledgerId] ?? '未知账本'} · ${_date(header.occurredAt)}',
-          amountText: '¥${formatCents(total)}',
-        );
-      case TransferEntry(transfer: final Transfer transfer):
-        return RecentItemCard(
-          title: '转账',
-          subtitle:
-              '${ledgerNames[transfer.ledgerId] ?? '未知账本'} · ${_date(transfer.occurredAt)}',
-          amountText: '¥${formatCents(transfer.amount)}',
-        );
-    }
-  }
-
-  /// 秒时间戳转 yyyy-MM-dd。
-  String _date(int seconds) {
-    final DateTime date = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '${date.year}-${two(date.month)}-${two(date.day)}';
-  }
+/// 秒时间戳转 yyyy-MM-dd。
+String _date(int seconds) {
+  final DateTime date = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${date.year}-${two(date.month)}-${two(date.day)}';
 }

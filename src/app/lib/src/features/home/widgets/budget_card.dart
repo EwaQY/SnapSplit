@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money.dart';
+import '../../../common_widgets/async_state_box.dart';
 import '../providers/home_providers.dart';
 
 /// 首页预算卡：标题 + 金额 + 三色进度条 + 百分比；超支仅警告不阻断。
@@ -25,10 +26,12 @@ class BudgetCard extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: progress.when(
-          loading: () => const _BudgetLoading(),
-          error: (Object error, StackTrace stack) => _BudgetError(
+          loading: () => const LoadingBox(height: 97),
+          error: (Object error, StackTrace stack) => ErrorRetryBox(
+            message: '预算加载失败',
             onRetry: () =>
                 ref.read(currentBudgetProgressProvider.notifier).refresh(),
+            height: 97,
           ),
           data: (({int? budget, int spent, bool overBudget}) data) =>
               _BudgetBody(
@@ -36,46 +39,6 @@ class BudgetCard extends ConsumerWidget {
                 budget: data.budget,
                 overBudget: data.overBudget,
               ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 预算加载态：固定高度占位 + 居中进度条，避免布局跳动。
-class _BudgetLoading extends StatelessWidget {
-  /// 创建加载态。
-  const _BudgetLoading();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 97,
-      child: Center(child: CircularProgressIndicator()),
-    );
-  }
-}
-
-/// 预算失败态：错误提示 + 重试（首错直抛由 UI 重试）。
-class _BudgetError extends StatelessWidget {
-  /// 创建失败态。
-  const _BudgetError({required this.onRetry});
-
-  /// 重试回调。
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 97,
-      child: Center(
-        child: Column(
-          spacing: 8,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text('预算加载失败', style: AppTheme.rowTitle),
-            FilledButton(onPressed: onRetry, child: const Text('重试')),
-          ],
         ),
       ),
     );

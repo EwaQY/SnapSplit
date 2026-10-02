@@ -9,8 +9,15 @@ import '../../../core/theme/app_theme.dart';
 import '../../ledger/data/ledger_repository.dart';
 import '../providers/home_filter.dart';
 import '../providers/home_providers.dart';
-import '../widgets/tag_capsule.dart';
-import '../widgets/wheel_sheets.dart';
+import '../../../common_widgets/amount_field.dart';
+import '../../../common_widgets/date_pill.dart';
+import '../../../common_widgets/form_card.dart';
+import '../../../common_widgets/primary_button.dart';
+import '../../../common_widgets/search_field.dart';
+import '../../../common_widgets/select_row.dart';
+import '../../../common_widgets/sheet_divider.dart';
+import '../../../common_widgets/tag_capsule.dart';
+import '../../../common_widgets/wheel_sheets.dart';
 
 /// 打开账目筛选弹窗（底部 Sheet，全宽，顶圆角 14，底 `#F2F2F7`）。
 ///
@@ -210,17 +217,17 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
                       Column(
                         spacing: 12,
                         children: <Widget>[
-                          _FormCard(
+                          FormCard(
                             child: Column(
                               spacing: 10,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
-                                _SelectRow(
+                                SelectRow(
                                   label: '账本',
                                   value: ledgerName,
                                   onTap: () => _pickLedger(ledgers),
                                 ),
-                                const _SheetDivider(),
+                                const SheetDivider(),
                                 _TagBlock(
                                   tags: _tags,
                                   selectedIds: _tagIds,
@@ -241,18 +248,18 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
                               ],
                             ),
                           ),
-                          _FormCard(
+                          FormCard(
                             child: Column(
                               spacing: 10,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
-                                _SelectRow(
+                                SelectRow(
                                   label: '支付人',
                                   value: payerName,
                                   onTap: _pickPayer,
                                 ),
-                                const _SheetDivider(),
-                                _SelectRow(
+                                const SheetDivider(),
+                                SelectRow(
                                   label: '参与人',
                                   value: participantName,
                                   onTap: _pickParticipants,
@@ -260,17 +267,17 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
                               ],
                             ),
                           ),
-                          _FormCard(
+                          FormCard(
                             child: Column(
                               spacing: 10,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
-                                _AmountRow(
+                                AmountRow(
                                   minController: _minController,
                                   maxController: _maxController,
                                 ),
-                                const _SheetDivider(),
-                                _DateRow(
+                                const SheetDivider(),
+                                DateRow(
                                   startDate: _startDate,
                                   endDate: _endDate,
                                   onPickStart: () => _pickDate(isStart: true),
@@ -279,14 +286,14 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
                               ],
                             ),
                           ),
-                          _FormCard(
-                            child: _SearchRow(
+                          FormCard(
+                            child: SearchField(
                               controller: _keywordController,
                             ),
                           ),
                         ],
                       ),
-                      _ConfirmButton(onTap: _confirm),
+                      PrimaryButton(label: '确定', onTap: _confirm),
                     ],
                   ),
                 ),
@@ -447,88 +454,6 @@ class _MemberOption {
   final bool isSelf;
 }
 
-/// 表单白卡：白底圆角 12，内边距 `12/20/12/20`（横向 20 使行宽 318）。
-class _FormCard extends StatelessWidget {
-  /// 创建表单白卡。
-  const _FormCard({required this.child});
-
-  /// 卡内行列。
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.all(
-          Radius.circular(AppTheme.radiusLarge),
-        ),
-      ),
-      child: child,
-    );
-  }
-}
-
-/// 卡片内分割线：1px 轨道灰，紧凑高度（内容宽，不出卡片内边距）。
-class _SheetDivider extends StatelessWidget {
-  /// 创建分割线。
-  const _SheetDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Divider(
-      height: 1,
-      thickness: 1,
-      color: AppTheme.trackGray,
-    );
-  }
-}
-
-/// 选择行：左标签 + 右值 + ^v，整行可点。
-class _SelectRow extends StatelessWidget {
-  /// 创建选择行。
-  const _SelectRow({
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  /// 左标签。
-  final String label;
-
-  /// 右值摘要。
-  final String value;
-
-  /// 点击回调。
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Row(
-        spacing: 10,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: <Widget>[
-          Text(label, style: AppTheme.formLabel),
-          Row(
-            spacing: 4,
-            children: <Widget>[
-              Text(value, style: AppTheme.formValue),
-              const Icon(
-                Icons.unfold_more_outlined,
-                size: 16,
-                color: AppTheme.secondaryGray,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// 标签块：标签文本 + 胶囊换行多选。
 class _TagBlock extends StatelessWidget {
   /// 创建标签块。
@@ -584,253 +509,6 @@ class _TagBlock extends StatelessWidget {
             ],
           ),
       ],
-    );
-  }
-}
-
-/// 金额行：左标签 + 右区间输入（66×26 灰药丸）+ 元。
-class _AmountRow extends StatelessWidget {
-  /// 创建金额行。
-  const _AmountRow({
-    required this.minController,
-    required this.maxController,
-  });
-
-  /// 最小金额（元）控制器。
-  final TextEditingController minController;
-
-  /// 最大金额（元）控制器。
-  final TextEditingController maxController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      spacing: 10,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: <Widget>[
-        Text('金额', style: AppTheme.formLabel),
-        Row(
-          spacing: 6,
-          children: <Widget>[
-            _AmountField(controller: minController),
-            Text('~', style: AppTheme.rowSubtitle),
-            _AmountField(controller: maxController),
-            Text('元', style: AppTheme.rowSubtitle),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// 金额输入框：66×26，圆角 8，底 `#E5E5EA`，数字键盘。
-class _AmountField extends StatelessWidget {
-  /// 创建金额输入框。
-  const _AmountField({required this.controller});
-
-  /// 输入控制器。
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 66,
-      height: 26,
-      decoration: const BoxDecoration(
-        color: AppTheme.trackGray,
-        borderRadius: BorderRadius.all(
-          Radius.circular(AppTheme.radiusField),
-        ),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        textAlign: TextAlign.center,
-        textAlignVertical: TextAlignVertical.center,
-        // 撑满 66×26 盒子再双居中：isCollapsed 只收内容高，换 expands 才稳。
-        expands: true,
-        maxLines: null,
-        minLines: null,
-        style: AppTheme.rowTitle,
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          isCollapsed: true,
-        ),
-      ),
-    );
-  }
-}
-
-/// 日期行：左标签 + 日历图标 + 区间药丸（未选为空药丸，已选 MM-dd）。
-class _DateRow extends StatelessWidget {
-  /// 创建日期行。
-  const _DateRow({
-    required this.startDate,
-    required this.endDate,
-    required this.onPickStart,
-    required this.onPickEnd,
-  });
-
-  /// 开始日期。
-  final DateTime? startDate;
-
-  /// 结束日期。
-  final DateTime? endDate;
-
-  /// 选开始日期回调。
-  final VoidCallback onPickStart;
-
-  /// 选结束日期回调。
-  final VoidCallback onPickEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      spacing: 10,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: <Widget>[
-        Text('日期', style: AppTheme.formLabel),
-        Row(
-          spacing: 6,
-          children: <Widget>[
-            const Icon(
-              Icons.date_range_outlined,
-              size: 20,
-              color: AppTheme.secondaryGray,
-            ),
-            _DatePill(date: startDate, onTap: onPickStart),
-            Text('~', style: AppTheme.rowSubtitle),
-            _DatePill(date: endDate, onTap: onPickEnd),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// 日期药丸：66×26，圆角 8，底 `#E5E5EA`；已选显示 MM-dd。
-class _DatePill extends StatelessWidget {
-  /// 创建日期药丸。
-  const _DatePill({required this.date, required this.onTap});
-
-  /// 已选日期（null = 未选）。
-  final DateTime? date;
-
-  /// 点击回调。
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final DateTime? date = this.date;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: const BorderRadius.all(
-        Radius.circular(AppTheme.radiusField),
-      ),
-      child: Container(
-        width: 66,
-        height: 26,
-        decoration: const BoxDecoration(
-          color: AppTheme.trackGray,
-          borderRadius: BorderRadius.all(
-            Radius.circular(AppTheme.radiusField),
-          ),
-        ),
-        child: Center(
-          child: Text(
-            date == null
-                ? ''
-                : '${date.month.toString().padLeft(2, '0')}-'
-                      '${date.day.toString().padLeft(2, '0')}',
-            style: AppTheme.rowTitle,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 搜索行：左标签 + 搜索框（高 26，圆角 8，底 `#E5E5EA`）。
-class _SearchRow extends StatelessWidget {
-  /// 创建搜索行。
-  const _SearchRow({required this.controller});
-
-  /// 输入控制器。
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      spacing: 12,
-      children: <Widget>[
-        Text('账目标题', style: AppTheme.formLabel),
-        Expanded(
-          child: Container(
-            height: 26,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: const BoxDecoration(
-              color: AppTheme.trackGray,
-              borderRadius: BorderRadius.all(
-                Radius.circular(AppTheme.radiusField),
-              ),
-            ),
-            child: Row(
-              spacing: 4,
-              children: <Widget>[
-                const Icon(
-                  Icons.search_outlined,
-                  size: 16,
-                  color: AppTheme.secondaryGray,
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    style: AppTheme.rowTitle,
-                    textAlignVertical: TextAlignVertical.center,
-                    expands: true,
-                    maxLines: null,
-                    minLines: null,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 确定键：全宽高 50，主蓝圆角 12，白字 17/700。
-class _ConfirmButton extends StatelessWidget {
-  /// 创建确定键。
-  const _ConfirmButton({required this.onTap});
-
-  /// 点击回调。
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: FilledButton(
-        onPressed: onTap,
-        style: FilledButton.styleFrom(
-          backgroundColor: AppTheme.primaryBlue,
-          foregroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(
-              Radius.circular(AppTheme.radiusLarge),
-            ),
-          ),
-        ),
-        child: Text('确定', style: AppTheme.entryLabel(Colors.white)),
-      ),
     );
   }
 }
