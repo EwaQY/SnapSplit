@@ -9,8 +9,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../ledger/data/ledger_repository.dart';
 import '../providers/home_filter.dart';
 import '../providers/home_providers.dart';
-import '../widgets/calendar_dialog.dart';
 import '../widgets/tag_capsule.dart';
+import '../widgets/wheel_sheets.dart';
 
 /// 打开账目筛选弹窗（底部 Sheet，全宽，顶圆角 14，底 `#F2F2F7`）。
 ///
@@ -298,28 +298,17 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
     );
   }
 
-  /// 账本单选（所有账本 + 账本列表）；下滑取消不改值。
+  /// 账本单选（iOS 滚轮，所有账本 + 账本列表）；取消不改值。
   Future<void> _pickLedger(List<Ledger> ledgers) async {
-    final String? picked = await showModalBottomSheet<String>(
-      context: context,
-      builder: (BuildContext context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _OptionTile(
-              label: '所有账本',
-              selected: _ledgerId == null,
-              onTap: () => Navigator.pop(context, ''),
-            ),
-            for (final Ledger ledger in ledgers)
-              _OptionTile(
-                label: ledger.name,
-                selected: ledger.id == _ledgerId,
-                onTap: () => Navigator.pop(context, ledger.id),
-              ),
-          ],
-        ),
-      ),
+    final String? picked = await showWheelOptionSheet<String>(
+      context,
+      title: '账本',
+      options: <WheelOption<String>>[
+        const WheelOption<String>(value: '', label: '所有账本'),
+        for (final Ledger ledger in ledgers)
+          WheelOption<String>(value: ledger.id, label: ledger.name),
+      ],
+      initialValue: _ledgerId ?? '',
     );
     if (!mounted || picked == null) {
       return;
@@ -329,31 +318,21 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
     });
   }
 
-  /// 付款人单选（不限 + 成员）。
+  /// 付款人单选（iOS 滚轮，不限 + 成员）。
   Future<void> _pickPayer() async {
     final List<_MemberOption> members = _members ?? <_MemberOption>[];
-    final String? picked = await showModalBottomSheet<String>(
-      context: context,
-      builder: (BuildContext context) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              _OptionTile(
-                label: '不限',
-                selected: _payerId == null,
-                onTap: () => Navigator.pop(context, ''),
-              ),
-              for (final _MemberOption option in members)
-                _OptionTile(
-                  label: option.nickname,
-                  selected: option.userId == _payerId,
-                  onTap: () => Navigator.pop(context, option.userId),
-                ),
-            ],
+    final String? picked = await showWheelOptionSheet<String>(
+      context,
+      title: '支付人',
+      options: <WheelOption<String>>[
+        const WheelOption<String>(value: '', label: '不限'),
+        for (final _MemberOption option in members)
+          WheelOption<String>(
+            value: option.userId,
+            label: option.nickname,
           ),
-        ),
-      ),
+      ],
+      initialValue: _payerId ?? '',
     );
     if (!mounted || picked == null) {
       return;
@@ -363,16 +342,20 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
     });
   }
 
-  /// 参与人多选（确定后落值）。
+  /// 参与人多选（iOS check 表，确定后落值）。
   Future<void> _pickParticipants() async {
     final List<_MemberOption> members = _members ?? <_MemberOption>[];
-    final Set<String>? picked = await showModalBottomSheet<Set<String>>(
-      context: context,
-      builder: (BuildContext context) =>
-          _MultiSelectSheet(
-            options: members,
-            initial: _participantIds,
+    final Set<String>? picked = await showCheckOptionSheet(
+      context,
+      title: '参与人',
+      options: <WheelOption<String>>[
+        for (final _MemberOption option in members)
+          WheelOption<String>(
+            value: option.userId,
+            label: option.nickname,
           ),
+      ],
+      initial: _participantIds,
     );
     if (!mounted || picked == null) {
       return;
@@ -382,10 +365,10 @@ class _FilterSheetBodyState extends ConsumerState<_FilterSheetBody> {
     });
   }
 
-  /// 日期单选（起/止）：自研日历弹窗，只取年月日。
+  /// 日期单选（起/止）：iOS 滚轮日期，只取年月日。
   Future<void> _pickDate({required bool isStart}) async {
     final DateTime now = DateTime.now();
-    final DateTime? picked = await showCalendarDialog(
+    final DateTime? picked = await showWheelDateSheet(
       context,
       initialDate: isStart
           ? (_startDate ?? now)
@@ -847,113 +830,6 @@ class _ConfirmButton extends StatelessWidget {
           ),
         ),
         child: Text('确定', style: AppTheme.entryLabel(Colors.white)),
-      ),
-    );
-  }
-}
-
-/// 单选行：选中态标题色高亮。
-class _OptionTile extends StatelessWidget {
-  /// 创建单选行。
-  const _OptionTile({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  /// 选项文字。
-  final String label;
-
-  /// 是否选中。
-  final bool selected;
-
-  /// 点击回调。
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(
-        label,
-        style: selected
-            ? AppTheme.formLabel.copyWith(color: AppTheme.primaryBlue)
-            : AppTheme.formLabel,
-      ),
-      trailing: selected
-          ? const Icon(Icons.check_outlined, color: AppTheme.primaryBlue)
-          : null,
-      onTap: onTap,
-    );
-  }
-}
-
-/// 多选表：复选行 + 底部确定键。
-class _MultiSelectSheet extends StatefulWidget {
-  /// 创建多选表。
-  const _MultiSelectSheet({
-    required this.options,
-    required this.initial,
-  });
-
-  /// 成员选项。
-  final List<_MemberOption> options;
-
-  /// 初始已选。
-  final Set<String> initial;
-
-  @override
-  State<_MultiSelectSheet> createState() => _MultiSelectSheetState();
-}
-
-class _MultiSelectSheetState extends State<_MultiSelectSheet> {
-  late Set<String> _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = Set<String>.of(widget.initial);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  for (final _MemberOption option in widget.options)
-                    CheckboxListTile(
-                      value: _selected.contains(option.userId),
-                      title: Text(
-                        option.nickname,
-                        style: AppTheme.formLabel,
-                      ),
-                      activeColor: AppTheme.primaryBlue,
-                      onChanged: (bool? checked) {
-                        setState(() {
-                          if (checked ?? false) {
-                            _selected.add(option.userId);
-                          } else {
-                            _selected.remove(option.userId);
-                          }
-                        });
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: _ConfirmButton(
-              onTap: () => Navigator.pop(context, _selected),
-            ),
-          ),
-        ],
       ),
     );
   }
