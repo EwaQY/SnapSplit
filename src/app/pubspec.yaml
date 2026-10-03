@@ -43,13 +43,15 @@ dependencies:
   http: ^1.6.0
   openai_dart: ^9.0.0
   image_picker: ^1.2.3
+  permission_handler: ^12.0.0
+  device_info_plus: ^12.0.0
   intl: ^0.20.3
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
   drift: ^2.35.0
   drift_flutter: ^0.3.1
   sqlite3: ^3.6.0
-
+  google_fonts: 7.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
