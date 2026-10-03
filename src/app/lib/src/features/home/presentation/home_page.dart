@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../data/entry_media_service.dart';
+import '../providers/home_providers.dart';
 import '../widgets/app_tab_bar.dart';
 import '../widgets/budget_card.dart';
 import '../widgets/entry_actions.dart';
@@ -8,16 +11,17 @@ import '../widgets/recent_section.dart';
 
 /// 首页空壳：页面仅挂录入行，其余待后续指令逐项加。
 ///
-/// 录入口点击本期均为占位提示（AI 链路下期）；底导见 [AppTabBar]。
-class HomePage extends StatefulWidget {
+/// 拍照/截图录入走系统相机/相册（含权限申请），拿到图后提示
+/// （AI 链路下期）；手动录入页下期再做；底导见 [AppTabBar]。
+class HomePage extends ConsumerStatefulWidget {
   /// 创建首页空壳。
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
   int _currentIndex = 0;
 
   void _handleHomeTap() {
@@ -49,6 +53,34 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 拍照/截图录入：申请权限 + 系统选图，结果弹提示（AI 链路下期）。
+  ///
+  /// 系统相册/相机里按返回 = 取消，静默回首页，不打扰。
+  Future<void> _handleMediaTap(EntryMediaSource source) async {
+    final EntryMediaResult result = await ref
+        .read(entryMediaServiceProvider)
+        .pick(source);
+    if (!mounted) {
+      return;
+    }
+    if (result.file == null) {
+      // 用户主动取消（未选择图片）：静默回；权限被拒才提示。
+      if (result.notice != null && result.notice != '未选择图片') {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.notice!)));
+      }
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${result.notice ?? '已选择图片'}：${result.file!.name}（AI 识别下期再接）',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,8 +104,12 @@ class _HomePageState extends State<HomePage> {
                             child: Text('首页', style: AppTheme.pageTitle),
                           ),
                           EntryActions(
-                            onScreenshotTap: _handleEntryPlaceholder,
-                            onPhotoTap: _handleEntryPlaceholder,
+                            onScreenshotTap: () => _handleMediaTap(
+                              EntryMediaSource.gallery,
+                            ),
+                            onPhotoTap: () => _handleMediaTap(
+                              EntryMediaSource.camera,
+                            ),
                             onManualTap: _handleEntryPlaceholder,
                           ),
                         ],

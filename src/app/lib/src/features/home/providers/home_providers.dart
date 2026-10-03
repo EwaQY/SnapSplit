@@ -5,6 +5,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/utils/app_time.dart';
 import '../../budget/data/budget_repository.dart';
 import '../../timeline/data/timeline_entries.dart';
+import '../data/entry_media_service.dart';
 import 'home_filter.dart';
 
 /// 首页预算进度：当前“我” + 自然当月的 [BudgetProgress] 只读聚合。
@@ -145,3 +146,8 @@ final homeRecentProvider =
     AsyncNotifierProvider<HomeRecentNotifier, HomeRecentData>(
       HomeRecentNotifier.new,
     );
+
+/// 录入选图服务：拍照/相册权限 + 系统选图（AI 链路下期）。
+final entryMediaServiceProvider = Provider<EntryMediaService>(
+  (Ref ref) => EntryMediaService(),
+);

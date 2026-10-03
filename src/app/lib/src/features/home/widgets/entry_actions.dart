@@ -6,7 +6,8 @@ import '../../../core/theme/app_theme.dart';
 ///
 /// 自动布局：左 `194×108` + gap 8 + 右列 `156×108（50+8+50）`；
 /// 左块纵贯右两行等高（`IntrinsicHeight` + stretch），右列垂直 gap 8。
-/// 本期均为占位回调（AI 链路下期），点击行为由调用方传入。
+/// 截图/拍照走系统相册/相机（含权限申请），手动录入页下期再做；
+/// 点击行为由调用方传入。
 class EntryActions extends StatelessWidget {
   /// 创建录入口。
   const EntryActions({
