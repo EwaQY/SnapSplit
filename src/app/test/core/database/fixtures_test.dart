@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:snap_split/src/core/database/app_database.dart';
+import 'package:snap_split/src/features/tags/data/tag_repository.dart';
 
 import '../../fixtures/seed_fixtures.dart';
 
@@ -28,15 +29,15 @@ void main() {
 
   test('各表行数对标', () async {
     expect(await count(db.users), 4);
-    expect(await count(db.tags), 10);
+    expect(await count(db.tags), 11);
     expect(await count(db.ledgers), 2);
     expect(await count(db.ledgerMembers), 7);
-    expect(await count(db.shoppingLists), 3);
-    expect(await count(db.expenseItems), 8);
-    expect(await count(db.itemTags), 9);
-    expect(await count(db.itemParticipants), 26);
+    expect(await count(db.shoppingLists), 4);
+    expect(await count(db.expenseItems), 9);
+    expect(await count(db.itemTags), 10);
+    expect(await count(db.itemParticipants), 28);
     expect(await count(db.transfers), 1);
-    expect(await count(db.budgets), 1);
+    expect(await count(db.budgets), 2);
   });
 
   test('关键真数', () async {
@@ -82,5 +83,47 @@ void main() {
       db.budgets,
     )..where((t) => t.id.equals('budget-001'))).getSingle();
     expect((budget.year, budget.month, budget.amount), (2026, 9, 500000));
+
+    // 当月预算：年月恒为执行时当月（首页预算卡有数）。
+    final DateTime now = DateTime.now();
+    final Budget current = await (db.select(
+      db.budgets,
+    )..where((t) => t.id.equals('budget-002'))).getSingle();
+    expect(
+      (current.year, current.month, current.amount),
+      (now.year, now.month, 500000),
+    );
+  });
+
+  test('首页相关动态真数', () async {
+    final int nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    const int daySec = 24 * 3600;
+    final DateTime now = DateTime.now();
+
+    // 窗内三单 + 转账相对 now 落在近 7 天里。
+    Future<int> occurredOf(String id) => (db.select(
+      db.shoppingLists,
+    )..where((t) => t.id.equals(id))).getSingle().then(
+      (ShoppingList e) => e.occurredAt,
+    );
+    expect(await occurredOf('sl-001'), greaterThan(nowSec - 7 * daySec));
+    expect(await occurredOf('sl-003'), greaterThan(nowSec - 7 * daySec));
+    final Transfer transfer = await (db.select(
+      db.transfers,
+    )..where((t) => t.id.equals('tr-001'))).getSingle();
+    expect(transfer.occurredAt, greaterThan(nowSec - 7 * daySec));
+
+    // sl-004 窗外旧账：早于 7 天窗口。
+    expect(await occurredOf('sl-004'), lessThan(nowSec - 7 * daySec));
+
+    // sl-001 恒在当月（首页预算卡恒有数）。
+    final int monthStart =
+        DateTime(now.year, now.month, 1).millisecondsSinceEpoch ~/ 1000;
+    expect(await occurredOf('sl-001'), greaterThanOrEqualTo(monthStart));
+
+    // 归档标签不在活跃列表（筛选器不可见）。
+    final List<Tag> active = await TagRepository(db).listActiveTags();
+    expect(active.length, 10);
+    expect(active.map((Tag e) => e.id), isNot(contains('tag-011')));
   });
 }

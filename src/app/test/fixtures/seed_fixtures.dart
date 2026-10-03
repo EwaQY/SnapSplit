@@ -7,9 +7,21 @@ import 'package:snap_split/src/core/database/app_database.dart';
 /// seed.sql 本身不再被执行（仅作行数/真数参考），此处用 companions 重写，
 /// 与 drift 强类型绑定，抄错会在编译期或断言中暴露。
 ///
-/// 对标值：user 4 / tag 10 / ledger 2 / ledger_member 7 / shopping_list 3 /
-/// expense_item 8 / item_tag 9 / item_participant 26 / transfer 1 / budget 1。
+/// 时间口径：`occurred_at`/预算年月相对执行时刻动态生成，保证首页
+/// “近 7 天”窗口与当月预算永远命中；`created/updated_at` 保持固定基线。
+/// 行数对标值见 `fixtures_test.dart`（与 seed.sql 尾部说明保持 1:1）。
+///
+/// 对标值：user 4 / tag 11（含 1 归档）/ ledger 2 / ledger_member 7 /
+/// shopping_list 4（含 1 窗外旧账）/ expense_item 9 / item_tag 10 /
+/// item_participant 28 / transfer 1 / budget 2（含当月）。
 Future<void> insertSeedFixtures(AppDatabase db) async {
+  final int nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  const int daySec = 24 * 3600;
+  final DateTime now = DateTime.now();
+  final int monthStartSec =
+      DateTime(now.year, now.month, 1).millisecondsSinceEpoch ~/ 1000;
+  // sl-001 恒在当月：月初几天 now-1 天会掉到上月，此时钳到本月 1 日中午，
+  // 保证首页预算卡恒有数（spent 只统计我付款的当月账目）。
   await db.batch((Batch b) {
     // 1. 用户：1 本地账户 + 3 虚拟成员。
     b.insertAll(db.users, <UsersCompanion>[
@@ -33,7 +45,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
         ),
     ]);
 
-    // 2. 全局共享标签 10 个。
+    // 2. 全局共享标签 10 个 + 归档标签 1 个（筛选器只出活跃标签）。
     const List<(String, String, String)> tags = <(String, String, String)>[
       ('tag-001', '餐饮', '🍽️'),
       ('tag-002', '交通', '🚗'),
@@ -57,6 +69,15 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
             createdAt: 1790000000,
             updatedAt: 1790000000,
           ),
+        // tag-011 已归档示例：listActiveTags 不返回，筛选器不可见。
+        TagsCompanion.insert(
+          id: 'tag-011',
+          name: '宠物',
+          icon: const Value('🐱'),
+          archivedAt: const Value(1790000000),
+          createdAt: 1790000000,
+          updatedAt: 1790000000,
+        ),
       ],
     );
 
@@ -103,14 +124,17 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
       ],
     );
 
-    // 5. 购物单 3 个（含 sl-002 的默认参与人子集快照）。
+    // 5. 购物单 4 个（含 sl-002 的默认参与人子集快照，sl-004 为窗外旧账）。
+    // occurred_at 相对执行时刻：窗内 -1/-2/-3/-6 天，窗外 -8 天。
     b.insertAll(db.shoppingLists, <ShoppingListsCompanion>[
       ShoppingListsCompanion.insert(
         id: 'sl-001',
         ledgerId: 'ledger-001',
         title: const Value('超市采购'),
         merchant: const Value('盒马鲜生'),
-        occurredAt: 1789900000,
+        occurredAt: nowSec - daySec < monthStartSec
+            ? monthStartSec + 12 * 3600
+            : nowSec - daySec,
         defaultPayerId: const Value('user-001'),
         defaultParticipantIds: const Value(
           '["user-001","user-002","user-003"]',
@@ -125,7 +149,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
         ledgerId: 'ledger-001',
         title: const Value('午餐外卖'),
         merchant: const Value('美团外卖'),
-        occurredAt: 1789800000,
+        occurredAt: nowSec - 3 * daySec,
         defaultPayerId: const Value('user-002'),
         defaultParticipantIds: const Value('["user-002"]'),
         source: const Value('ai'),
@@ -137,7 +161,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
         ledgerId: 'ledger-002',
         title: const Value('周五聚餐'),
         merchant: const Value('海底捞'),
-        occurredAt: 1789700000,
+        occurredAt: nowSec - 6 * daySec,
         defaultPayerId: const Value('user-001'),
         defaultParticipantIds: const Value(
           '["user-001","user-002","user-003","user-004"]',
@@ -147,9 +171,23 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
         createdAt: 1790000000,
         updatedAt: 1790000000,
       ),
+      // sl-004 窗外旧账：首页默认近 7 天窗口滤掉，选起止日期后出现。
+      ShoppingListsCompanion.insert(
+        id: 'sl-004',
+        ledgerId: 'ledger-001',
+        title: const Value('中秋旧账'),
+        merchant: const Value('超市'),
+        occurredAt: nowSec - 8 * daySec,
+        defaultPayerId: const Value('user-001'),
+        defaultParticipantIds: const Value('["user-001","user-002"]'),
+        note: const Value('默认窗口外，选日期后可见'),
+        source: const Value('manual'),
+        createdAt: 1790000000,
+        updatedAt: 1790000000,
+      ),
     ]);
 
-    // 6. 账目 8 条。
+    // 6. 账目 9 条（ei-009 归属窗外旧账 sl-004）。
     const List<(String, String, String, String, int, int, int, String)>
     items = <(String, String, String, String, int, int, int, String)>[
       // (id, shoppingListId, ledgerId, name, qty, unitPrice, final, payer)
@@ -161,6 +199,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
       ('ei-006', 'sl-003', 'ledger-002', '肥牛卷', 2, 6000, 12000, 'user-001'),
       ('ei-007', 'sl-003', 'ledger-002', '蔬菜拼盘', 1, 3500, 3500, 'user-001'),
       ('ei-008', 'sl-003', 'ledger-002', '饮料', 4, 800, 3200, 'user-001'),
+      ('ei-009', 'sl-004', 'ledger-001', '月饼礼盒', 1, 6000, 6000, 'user-001'),
     ];
     b.insertAll(
       db.expenseItems,
@@ -192,6 +231,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
       ('it-007', 'ei-006', 'tag-001'),
       ('it-008', 'ei-007', 'tag-001'),
       ('it-009', 'ei-008', 'tag-001'),
+      ('it-010', 'ei-009', 'tag-003'),
     ];
     b.insertAll(
       db.itemTags,
@@ -206,7 +246,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
       ],
     );
 
-    // 8. 账目参与人 26 条。
+    // 8. 账目参与人 28 条（末 2 条归属窗外旧账 ei-009，两人均摊）。
     final List<(String, String, int)> participants =
         <(String, String, int)>[
           for (final (String itemId, int share, List<String> users) in <
@@ -240,6 +280,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
               'user-003',
               'user-004',
             ]),
+            ('ei-009', 3000, <String>['user-001', 'user-002']),
           ])
             for (final user in users) (itemId, user, share),
         ];
@@ -259,7 +300,7 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
       ],
     );
 
-    // 9. 转账 1 条。
+    // 9. 转账 1 条（窗内 -2 天，首页最近列表可见）。
     b.insert(
       db.transfers,
       TransfersCompanion.insert(
@@ -268,14 +309,14 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
         fromUserId: 'user-002',
         toUserId: 'user-001',
         amount: 1500,
-        occurredAt: 1789600000,
+        occurredAt: nowSec - 2 * daySec,
         note: const Value('还上次垫付的饭钱'),
         createdAt: 1790000000,
         updatedAt: 1790000000,
       ),
     );
 
-    // 10. 预算 1 条（2026-09，5000 元）。
+    // 10. 预算 2 条：历史 2026-09（只读）+ 执行时当月（首页预算卡有数）。
     b.insert(
       db.budgets,
       BudgetsCompanion.insert(
@@ -284,6 +325,18 @@ Future<void> insertSeedFixtures(AppDatabase db) async {
         amount: 500000,
         year: 2026,
         month: 9,
+        createdAt: 1790000000,
+        updatedAt: 1790000000,
+      ),
+    );
+    b.insert(
+      db.budgets,
+      BudgetsCompanion.insert(
+        id: 'budget-002',
+        userId: 'user-001',
+        amount: 500000,
+        year: now.year,
+        month: now.month,
         createdAt: 1790000000,
         updatedAt: 1790000000,
       ),

@@ -1,13 +1,16 @@
 -- ============================================================
 -- SnapSplit Test Data Seed
--- Version: 3.0
+-- Version: 3.1
 -- Based on PRD V4.0
 -- 说明：此脚本用于开发测试，插入示例数据
 -- 使用前请先执行 schema.sql
+-- 时间口径（v3.1 起）：occurred_at 与当月预算相对执行时刻动态生成，
+-- 保证首页“近 7 天”窗口与当月预算永远命中；created/updated_at 保持固定基线。
+-- 可执行真相在 src/app/test/fixtures/seed_fixtures.dart，本文件与其保持 1:1。
 -- ============================================================
 
--- 使用固定时间戳便于测试（2026-09-22 12:00:00 UTC = 1790000000）
--- 注意：实际使用时请替换为当前时间戳
+-- 固定基线时间戳（created/updated/归档：2026-09-22 12:00:00 UTC = 1790000000）
+-- 注意：occurred_at 请用 (strftime('%s','now') - N*86400) 动态写法，见下文
 
 -- ============================================================
 -- 1. 用户数据
@@ -64,6 +67,13 @@ VALUES
     ('tag-009', '服饰', '👕', 1790000000, 1790000000),
     ('tag-010', '其他', '📦', 1790000000, 1790000000);
 
+-- 归档标签示例：筛选器只出活跃标签，此条不可见
+INSERT INTO "tag" ("id", "name", "icon", "archived_at", "created_at", "updated_at")
+VALUES (
+    'tag-011', '宠物', '🐱', 1790000000,
+    1790000000, 1790000000
+);
+
 -- ============================================================
 -- 3. 账本数据
 -- ============================================================
@@ -109,37 +119,49 @@ VALUES
 -- 5. 购物单数据
 -- ============================================================
 
--- 超市购物（多商品）
+-- 超市购物（多商品，窗内 -1 天；月初几天 -1 天会掉到上月，此时钳到本月 1 日中午，
+-- 保证首页预算卡恒有数）
 INSERT INTO "shopping_list" (
     "id", "ledger_id", "title", "merchant", "occurred_at",
     "default_payer_id", "default_participant_ids", "note", "source",
     "created_at", "updated_at"
 ) VALUES (
-    'sl-001', 'ledger-001', '超市采购', '盒马鲜生', 1789900000,
+    'sl-001', 'ledger-001', '超市采购', '盒马鲜生', max(strftime('%s','now') - 86400, strftime('%s','now','start of month','+12 hours')),
     'user-001', '["user-001","user-002","user-003"]', '周末采购日用品', 'manual',
     1790000000, 1790000000
 );
 
--- 外卖订单（单商品）
+-- 外卖订单（单商品，窗内 -3 天）
 INSERT INTO "shopping_list" (
     "id", "ledger_id", "title", "merchant", "occurred_at",
     "default_payer_id", "default_participant_ids", "note", "source",
     "created_at", "updated_at"
 ) VALUES (
-    'sl-002', 'ledger-001', '午餐外卖', '美团外卖', 1789800000,
+    'sl-002', 'ledger-001', '午餐外卖', '美团外卖', (strftime('%s','now') - 3*86400),
     -- 默认参与人快照为子集（仅user-002），演示快照与"全部成员"推导值的差异
     'user-002', '["user-002"]', NULL, 'ai',
     1790000000, 1790000000
 );
 
--- 聚餐
+-- 聚餐（窗内 -6 天）
 INSERT INTO "shopping_list" (
     "id", "ledger_id", "title", "merchant", "occurred_at",
     "default_payer_id", "default_participant_ids", "note", "source",
     "created_at", "updated_at"
 ) VALUES (
-    'sl-003', 'ledger-002', '周五聚餐', '海底捞', 1789700000,
+    'sl-003', 'ledger-002', '周五聚餐', '海底捞', (strftime('%s','now') - 6*86400),
     'user-001', '["user-001","user-002","user-003","user-004"]', '四人聚餐', 'manual',
+    1790000000, 1790000000
+);
+
+-- 窗外旧账（-8 天，首页默认近 7 天窗口滤掉，选起止日期后出现）
+INSERT INTO "shopping_list" (
+    "id", "ledger_id", "title", "merchant", "occurred_at",
+    "default_payer_id", "default_participant_ids", "note", "source",
+    "created_at", "updated_at"
+) VALUES (
+    'sl-004', 'ledger-001', '中秋旧账', '超市', (strftime('%s','now') - 8*86400),
+    'user-001', '["user-001","user-002"]', '默认窗口外，选日期后可见', 'manual',
     1790000000, 1790000000
 );
 
@@ -176,6 +198,14 @@ INSERT INTO "expense_item" (
     ('ei-007', 'sl-003', 'ledger-002', '蔬菜拼盘', 1, 3500, 3500, 'user-001', 1790000000, 1790000000),
     ('ei-008', 'sl-003', 'ledger-002', '饮料', 4, 800, 3200, 'user-001', 1790000000, 1790000000);
 
+-- 窗外旧账账目（归属 sl-004）
+INSERT INTO "expense_item" (
+    "id", "shopping_list_id", "ledger_id", "name", "quantity", "unit_price", "final_amount",
+    "payer_id",
+    "created_at", "updated_at"
+) VALUES
+    ('ei-009', 'sl-004', 'ledger-001', '月饼礼盒', 1, 6000, 6000, 'user-001', 1790000000, 1790000000);
+
 -- ============================================================
 -- 7. 账目-标签关联
 -- ============================================================
@@ -191,7 +221,8 @@ VALUES
     ('it-006', 'ei-005', 'tag-001', 1790000000),
     ('it-007', 'ei-006', 'tag-001', 1790000000),
     ('it-008', 'ei-007', 'tag-001', 1790000000),
-    ('it-009', 'ei-008', 'tag-001', 1790000000);
+    ('it-009', 'ei-008', 'tag-001', 1790000000),
+    ('it-010', 'ei-009', 'tag-003', 1790000000);
 
 -- ============================================================
 -- 8. 账目参与人
@@ -242,6 +273,12 @@ VALUES
     ('ip-025', 'ei-008', 'user-003', 800, 1790000000, 1790000000),
     ('ip-026', 'ei-008', 'user-004', 800, 1790000000, 1790000000);
 
+-- 窗外旧账：月饼礼盒 60元，2人均摊，每人30元
+INSERT INTO "item_participant" ("id", "expense_item_id", "user_id", "share_amount", "created_at", "updated_at")
+VALUES
+    ('ip-027', 'ei-009', 'user-001', 3000, 1790000000, 1790000000),
+    ('ip-028', 'ei-009', 'user-002', 3000, 1790000000, 1790000000);
+
 -- ============================================================
 -- 9. 转账记录
 -- ============================================================
@@ -250,7 +287,7 @@ INSERT INTO "transfer" (
     "id", "ledger_id", "from_user_id", "to_user_id", "amount", "occurred_at", "note",
     "created_at", "updated_at"
 ) VALUES (
-    'tr-001', 'ledger-001', 'user-002', 'user-001', 1500, 1789600000, '还上次垫付的饭钱',
+    'tr-001', 'ledger-001', 'user-002', 'user-001', 1500, (strftime('%s','now') - 2*86400), '还上次垫付的饭钱',
     1790000000, 1790000000
 );
 
@@ -258,11 +295,21 @@ INSERT INTO "transfer" (
 -- 10. 预算数据
 -- ============================================================
 
+-- 历史月预算（2026-09，5000 元，只读）
 INSERT INTO "budget" (
     "id", "user_id", "amount", "year", "month",
     "created_at", "updated_at"
 ) VALUES (
     'budget-001', 'user-001', 500000, 2026, 9,
+    1790000000, 1790000000
+);
+
+-- 执行时当月预算（5000 元，首页预算卡有数）
+INSERT INTO "budget" (
+    "id", "user_id", "amount", "year", "month",
+    "created_at", "updated_at"
+) VALUES (
+    'budget-002', 'user-001', 500000, CAST(strftime('%Y','now') AS INTEGER), CAST(strftime('%m','now') AS INTEGER),
     1790000000, 1790000000
 );
 
@@ -272,15 +319,15 @@ INSERT INTO "budget" (
 -- 测试数据插入完成！
 -- 包含：
 -- - 1个本地账户"我" + 3个虚拟成员
--- - 10个全局共享标签
+-- - 11个标签（10 活跃 + 1 归档 tag-011，筛选器只出活跃）
 -- - 2个账本（室友合租、朋友聚餐）
 -- - 7个账本成员关联
--- - 3个购物单（多商品、单商品、聚餐）
--- - 8个账目
--- - 9条账目-标签关联（含1条多标签演示）
--- - 26个参与人记录
--- - 1条转账记录
--- - 1个月预算（9月，5000元）
+-- - 4个购物单（窗内 -1/-3/-6 天 + 窗外旧账 sl-004 -8 天）
+-- - 9个账目
+-- - 10条账目-标签关联（含1条多标签演示 + 旧账标签）
+-- - 28个参与人记录
+-- - 1条转账记录（窗内 -2 天）
+-- - 2个月预算（历史 2026-09 + 执行时当月，5000元）
 
 -- 末尾可执行语句：某些工具按分号切分逐段执行，文件尾部纯注释块会被当成一条 SQL 触发 "not an error"，加一行 SELECT 兜底
 SELECT 'seed_ok' AS seed_status;
